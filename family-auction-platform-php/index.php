@@ -417,20 +417,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)db()->lastInsertId();
             write_audit($user['id'], 'item_created', 'Item', $id, json_encode(['title' => $title]));
         }
+        $uploadErrors = [];
         if (!empty($_FILES['images']['name'][0])) {
+            // Make sure the uploads folder exists and is writable (cPanel users
+            // sometimes forget to create it, or create it read-only).
+            if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0775, true);
+            $allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'];
             $sortBase = (int)db()->query('SELECT COUNT(*) FROM item_images WHERE item_id = ' . $id)->fetchColumn();
             foreach ($_FILES['images']['tmp_name'] as $i => $tmp) {
-                if (!is_uploaded_file($tmp)) continue;
-                $ext = strtolower(pathinfo($_FILES['images']['name'][$i], PATHINFO_EXTENSION));
-                if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'], true)) continue;
+                $origName = $_FILES['images']['name'][$i] ?? '';
+                if ($origName === '') continue;
+                $err = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_OK;
+                if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+                    $uploadErrors[] = $origName . ': حجم الصورة أكبر من الحد المسموح على الخادم';
+                    continue;
+                }
+                if ($err !== UPLOAD_ERR_OK || !is_uploaded_file($tmp)) {
+                    $uploadErrors[] = $origName . ': تعذّر رفع الصورة';
+                    continue;
+                }
+                $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowed, true)) {
+                    $uploadErrors[] = $origName . ': نوع غير مدعوم (استخدم JPG أو PNG — صور آيفون بصيغة HEIC غير مدعومة)';
+                    continue;
+                }
+                if (!is_writable(UPLOAD_DIR)) {
+                    $uploadErrors[] = 'مجلد uploads غير قابل للكتابة — عدّل صلاحياته إلى 755 من مدير الملفات';
+                    break;
+                }
                 $filename = uniqid('item' . $id . '_') . '.' . $ext;
-                if (move_uploaded_file($tmp, UPLOAD_DIR . '/' . $filename)) {
+                if (@move_uploaded_file($tmp, UPLOAD_DIR . '/' . $filename)) {
                     db()->prepare('INSERT INTO item_images (item_id, url, sort_order) VALUES (?, ?, ?)')
                         ->execute([$id, 'uploads/' . $filename, $sortBase + $i]);
+                } else {
+                    $uploadErrors[] = $origName . ': تعذّر حفظ الصورة (تحقق من صلاحيات مجلد uploads)';
                 }
             }
         }
-        redirect('index.php?page=admin_item_edit&id=' . $id);
+        redirect('index.php?page=admin_item_edit&id=' . $id . ($uploadErrors ? '&error=' . urlencode(implode(' • ', $uploadErrors)) : ''));
     }
 
     if ($action === 'admin_image_delete') {
