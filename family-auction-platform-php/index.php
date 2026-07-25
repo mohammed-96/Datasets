@@ -16,6 +16,9 @@ const DB_FILE = __DIR__ . '/auction.db';
 const UPLOAD_DIR = __DIR__ . '/uploads';
 const ADMIN_PHONE = '0500000000';
 const ADMIN_PIN = '998877';
+// After a bid is accepted, the auction is locked for this many seconds: only the
+// first bid in each window counts, any others that arrive during it are denied.
+const BID_COOLDOWN_SECONDS = 3;
 const CATEGORIES = ['GOLD' => 'ذهب', 'DIAMOND' => 'ألماس', 'WATCHES' => 'ساعات', 'JEWELRY' => 'مجوهرات', 'COLLECTIBLES' => 'مقتنيات', 'OTHER' => 'أخرى'];
 
 // ---------------------------------------------------------------------------
@@ -251,6 +254,9 @@ class AlreadyTopError extends BidError {}
 // first). The requested amount is no longer enough, so the caller just refreshes
 // to the new price and shows the (now higher) bid button.
 class StaleBidError extends BidError {}
+// Thrown when a bid arrives during the few-second lock that follows an accepted
+// bid. Only the first bid in each window is kept; the rest are denied.
+class CooldownError extends BidError {}
 
 function place_bid(int $userId, int $auctionId, int $amount): void {
     $pdo = db();
@@ -275,6 +281,16 @@ function place_bid(int $userId, int $auctionId, int $amount): void {
 
         if ($topBid && (int)$topBid['user_id'] === $userId) {
             throw new AlreadyTopError('أنت بالفعل أعلى مزايد على هذه القطعة');
+        }
+
+        // 3-second window: the highest bid is also the most recent accepted one
+        // (amounts only ever go up). If it landed less than the window ago, this
+        // bid loses the race and is denied.
+        if ($topBid) {
+            $sinceLast = $nowTs - strtotime($topBid['created_at']);
+            if ($sinceLast < BID_COOLDOWN_SECONDS) {
+                throw new CooldownError('تمت مزايدة قبل لحظات — انتظر ' . BID_COOLDOWN_SECONDS . ' ثوانٍ ثم أعد المزايدة');
+            }
         }
 
         $minNext = min_next_bid($auction, (bool)$topBid);
