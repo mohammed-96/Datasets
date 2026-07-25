@@ -200,7 +200,7 @@ function sync_auction(array $auction): array {
         $auction['status'] = 'LIVE';
     }
     if ($auction['status'] === 'LIVE' && $nowTs >= strtotime($auction['end_at'])) {
-        $top = db()->prepare("SELECT * FROM bids WHERE auction_id = ? AND status = 'active' ORDER BY amount DESC, created_at ASC LIMIT 1");
+        $top = db()->prepare("SELECT * FROM bids WHERE auction_id = ? AND status = 'active' ORDER BY amount DESC, id ASC LIMIT 1");
         $top->execute([$auction['id']]);
         $topBid = $top->fetch(PDO::FETCH_ASSOC);
         $winnerId = $topBid['user_id'] ?? null;
@@ -229,12 +229,20 @@ function min_next_bid(array $auction, bool $hasBids): int {
 }
 
 function active_bids(int $auctionId): array {
-    $stmt = db()->prepare("SELECT b.*, u.alias FROM bids b JOIN users u ON u.id = b.user_id WHERE b.auction_id = ? AND b.status = 'active' ORDER BY b.created_at DESC");
+    // Rank by amount so bids[0] is the true top bidder — the same rule the bid
+    // engine uses. Ordering by created_at alone breaks when two bids share the
+    // same second (only second precision is stored), which would show the wrong
+    // person as the top bidder. id DESC is a deterministic final tiebreak.
+    $stmt = db()->prepare("SELECT b.*, u.alias FROM bids b JOIN users u ON u.id = b.user_id WHERE b.auction_id = ? AND b.status = 'active' ORDER BY b.amount DESC, b.id DESC");
     $stmt->execute([$auctionId]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 class BidError extends Exception {}
+// Thrown when the user is already the top bidder. Not a real error — usually
+// just a stale page from before an auto-refresh — so the caller refreshes
+// quietly instead of showing an alarming message.
+class AlreadyTopError extends BidError {}
 
 function place_bid(int $userId, int $auctionId, int $amount): void {
     $pdo = db();
@@ -250,12 +258,12 @@ function place_bid(int $userId, int $auctionId, int $amount): void {
         if ($nowTs < strtotime($auction['start_at'])) throw new BidError('لم يبدأ المزاد بعد');
         if ($nowTs >= strtotime($auction['end_at'])) throw new BidError('انتهى المزاد');
 
-        $top = $pdo->prepare("SELECT * FROM bids WHERE auction_id = ? AND status = 'active' ORDER BY amount DESC, created_at ASC LIMIT 1");
+        $top = $pdo->prepare("SELECT * FROM bids WHERE auction_id = ? AND status = 'active' ORDER BY amount DESC, id ASC LIMIT 1");
         $top->execute([$auctionId]);
         $topBid = $top->fetch(PDO::FETCH_ASSOC);
 
         if ($topBid && (int)$topBid['user_id'] === $userId) {
-            throw new BidError('أنت بالفعل أعلى مزايد على هذه القطعة');
+            throw new AlreadyTopError('أنت بالفعل أعلى مزايد على هذه القطعة');
         }
 
         $minNext = min_next_bid($auction, (bool)$topBid);
@@ -332,6 +340,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = $auction ? min_next_bid($auction, (bool)active_bids($auctionId)) : 0;
         try {
             place_bid((int)$user['id'], $auctionId, $amount);
+        } catch (AlreadyTopError $e) {
+            // Stale page (you were already winning) — just refresh to the truth.
+            redirect('index.php?page=item&id=' . $auctionId);
         } catch (BidError $e) {
             redirect('index.php?page=item&id=' . $auctionId . '&error=' . urlencode($e->getMessage()));
         }
