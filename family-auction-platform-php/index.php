@@ -293,10 +293,12 @@ function place_bid(int $userId, int $auctionId, int $amount): void {
             }
         }
 
+        // The confirmed amount must exactly match the amount required right now.
+        // If it differs (the price moved after the page was shown), the bid is
+        // NOT approved — the bidder is told the new amount and can confirm again.
         $minNext = min_next_bid($auction, (bool)$topBid);
-        if ($amount < $minNext) {
-            // Someone else just bid this price (or higher) a moment ago.
-            throw new StaleBidError('تم رفع السعر للتو، الرجاء إعادة المزايدة');
+        if ($amount !== $minNext) {
+            throw new StaleBidError('تغيّر السعر، لم تتم المزايدة. المبلغ المطلوب الآن ' . money($minNext) . ' — حدّث الصفحة وأعد المحاولة');
         }
 
         $newEndAt = $auction['end_at'];
@@ -364,14 +366,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'bid') {
         $auctionId = (int)$_POST['auction_id'];
         if (!$user['accepted_rules_at']) redirect('index.php?page=rules&next=' . urlencode('index.php?page=item&id=' . $auctionId));
-        $auction = get_auction($auctionId);
-        $amount = $auction ? min_next_bid($auction, (bool)active_bids($auctionId)) : 0;
+        // The exact amount the bidder saw and confirmed on screen. place_bid only
+        // accepts it if it still equals the current required amount — so a bid is
+        // never placed at a different number than the one shown in the dialog.
+        $amount = (int)($_POST['amount'] ?? 0);
         try {
             place_bid((int)$user['id'], $auctionId, $amount);
-        } catch (AlreadyTopError | StaleBidError $e) {
-            // Either you were already winning, or someone beat you to this price a
-            // moment ago. Neither is a real error — just refresh to the new state,
-            // which shows the current price and a fresh bid button.
+        } catch (AlreadyTopError $e) {
+            // You were already winning — nothing to do, just refresh to the truth.
             redirect('index.php?page=item&id=' . $auctionId);
         } catch (BidError $e) {
             redirect('index.php?page=item&id=' . $auctionId . '&error=' . urlencode($e->getMessage()));
@@ -879,6 +881,7 @@ switch ($page) {
                   <form method="post" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
                     <input type="hidden" name="action" value="bid">
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
+                    <input type="hidden" name="amount" value="<?= $minNext ?>">
                     <?= csrf_field() ?>
                     <button type="submit" style="width:100%;margin-top:10px" id="js-bid-btn">زايد بـ <span id="js-min-next"><?= money($minNext) ?></span></button>
                   </form>
