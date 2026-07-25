@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  BIDDER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AuctionStatus {
+  DRAFT
+  UPCOMING
+  LIVE
+  ENDED
+  CANCELLED
+  SUSPENDED
+}
+
+enum BidStatus {
+  ACTIVE
+  VOIDED
+}
+
+enum ItemCategory {
+  GOLD
+  DIAMOND
+  WATCHES
+  JEWELRY
+  COLLECTIBLES
+  OTHER
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  realName            String
+  phone               String    @unique
+  passwordHash        String
+  alias               String    @unique
+  role                Role      @default(BIDDER)
+  status              UserStatus @default(ACTIVE)
+  acceptedRulesAt     DateTime?
+  sessionVersion      Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  bids                Bid[]
+  wonAuctions         Auction[] @relation("AuctionWinner")
+  auditLogs           AuditLog[] @relation("AuditActor")
+  favorites           Favorite[]
+  createdItems        Item[]    @relation("ItemCreatedBy")
+}
+
+model Item {
+  id            String     @id @default(cuid())
+  internalCode  String?    @unique
+  title         String
+  description   String?
+  weightGrams   Float?
+  karat         String?
+  condition     String?
+  notes         String?
+  category      ItemCategory?
+  createdById   String
+  createdBy     User       @relation("ItemCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  images        ItemImage[]
+  auctions      Auction[]
+  favorites     Favorite[]
+}
+
+model ItemImage {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Auction {
+  id                 String        @id @default(cuid())
+  itemId             String
+  item               Item          @relation(fields: [itemId], references: [id])
+  openingPrice       Float
+  currentPrice       Float
+  bidIncrement       Float
+  startAt            DateTime
+  endAt              DateTime
+  originalEndAt      DateTime
+  softCloseEnabled   Boolean       @default(true)
+  extensionMinutes   Int           @default(2)
+  status             AuctionStatus @default(DRAFT)
+  winnerUserId       String?
+  winner             User?         @relation("AuctionWinner", fields: [winnerUserId], references: [id])
+  winningBid         Float?
+  suspendedReason    String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  bids               Bid[]
+  favorites          Favorite[]
+
+  @@index([status])
+}
+
+model Bid {
+  id         String    @id @default(cuid())
+  auctionId  String
+  auction    Auction   @relation(fields: [auctionId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  amount     Float
+  status     BidStatus @default(ACTIVE)
+  voidedById String?
+  voidedAt   DateTime?
+  voidReason String?
+  createdAt  DateTime  @default(now())
+
+  @@index([auctionId, createdAt])
+  @@index([userId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id])
+  auctionId String?
+  auction   Auction? @relation(fields: [auctionId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, itemId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String?
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
