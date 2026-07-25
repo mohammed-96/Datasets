@@ -59,13 +59,25 @@ let auctionId = null;
   const itemId = new URL(page.url()).searchParams.get("id");
   check("uploaded image shows in edit page", await page.locator(".thumbs img").count() > 0);
 
+  // the image must actually be served (this is the "pics not visible" fix)
+  const imgSrc = await page.locator(".thumbs img").first().getAttribute("src");
+  check("image is served via media route", imgSrc && imgSrc.includes("media="));
+  const imgResp = await page.request.get(new URL(imgSrc, page.url()).href);
+  const ctype = (imgResp.headers()["content-type"] || "");
+  check("image loads (200 + image content-type)", imgResp.ok() && ctype.startsWith("image/"));
+
   // create auction for the item
   await page.goto(`${BASE}?page=admin_auction_new&item_id=${itemId}`);
   const now = new Date(Date.now() - 60000);
   const end = new Date(Date.now() + 2 * 3600000);
+  // The app treats datetime-local values as Riyadh wall-clock time (matching a
+  // Riyadh admin's browser), so emit them in Asia/Riyadh regardless of the CI TZ.
   function toLocal(d) {
-    const p = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    const p = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(d).reduce((a, x) => (a[x.type] = x.value, a), {});
+    return `${p.year}-${p.month}-${p.day}T${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
   }
   await page.fill('input[name=opening_price]', "1000");
   await page.fill('input[name=bid_increment]', "100");

@@ -7,11 +7,39 @@
 declare(strict_types=1);
 session_start();
 
+// All times (auction start/end, soft-close extension, countdown) are handled in
+// Riyadh local time so they match what the admin types and what bidders see,
+// regardless of what timezone the hosting server is set to.
+date_default_timezone_set('Asia/Riyadh');
+
 const DB_FILE = __DIR__ . '/auction.db';
 const UPLOAD_DIR = __DIR__ . '/uploads';
 const ADMIN_PHONE = '0500000000';
 const ADMIN_PIN = '998877';
 const CATEGORIES = ['GOLD' => 'ذهب', 'DIAMOND' => 'ألماس', 'WATCHES' => 'ساعات', 'JEWELRY' => 'مجوهرات', 'COLLECTIBLES' => 'مقتنيات', 'OTHER' => 'أخرى'];
+
+// ---------------------------------------------------------------------------
+// Serve uploaded images through PHP. This makes photos load in every setup —
+// the PHP built-in server (which routes everything through this file), Apache,
+// and installs in a subfolder — instead of depending on the web server to serve
+// the uploads/ folder directly.
+// ---------------------------------------------------------------------------
+if (isset($_GET['media'])) {
+    session_write_close();
+    $name = basename((string)$_GET['media']); // strip any path components (no traversal)
+    $path = UPLOAD_DIR . '/' . $name;
+    $types = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', 'svg' => 'image/svg+xml'];
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if ($name !== '' && isset($types[$ext]) && is_file($path)) {
+        header('Content-Type: ' . $types[$ext]);
+        header('Cache-Control: public, max-age=86400');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+    } else {
+        http_response_code(404);
+    }
+    exit;
+}
 
 // ---------------------------------------------------------------------------
 // Database bootstrap
@@ -112,6 +140,7 @@ function now(): string { return date('Y-m-d H:i:s'); }
 function h(?string $s): string { return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 function money(int $amount): string { return number_format($amount) . ' ريال'; }
 function fmt_dt(string $sqlDateTime): string { return date('Y-m-d h:i A', strtotime($sqlDateTime)); }
+function media_url(string $storedUrl): string { return 'index.php?media=' . rawurlencode(basename($storedUrl)); }
 
 function csrf_token(): string {
     if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
@@ -605,7 +634,7 @@ function auction_card(array $a): string {
     $url = $img->fetchColumn() ?: null;
     $price = $a['status'] === 'ENDED' && $a['winning_bid'] ? (int)$a['winning_bid'] : (int)$a['current_price'];
     return '<a class="item-card" href="index.php?page=item&id=' . $a['id'] . '">'
-        . ($url ? '<img src="' . h($url) . '" alt="">' : '<div style="aspect-ratio:1;background:#eee"></div>')
+        . ($url ? '<img src="' . h(media_url($url)) . '" alt="">' : '<div style="aspect-ratio:1;background:#eee"></div>')
         . '<div class="body">'
         . '<span class="badge ' . status_class($a['status']) . '">' . status_label($a['status']) . '</span>'
         . '<h3>' . h($a['title']) . '</h3>'
@@ -748,8 +777,8 @@ switch ($page) {
           <div>
             <h1><?= h($item['title']) ?></h1>
             <?php if ($images): ?>
-              <img src="<?= h($images[0]['url']) ?>" style="width:100%;border-radius:12px" alt="">
-              <?php if (count($images) > 1): ?><div class="thumbs"><?php foreach ($images as $im) echo '<img src="' . h($im['url']) . '" alt="">'; ?></div><?php endif; ?>
+              <img src="<?= h(media_url($images[0]['url'])) ?>" style="width:100%;border-radius:12px" alt="">
+              <?php if (count($images) > 1): ?><div class="thumbs"><?php foreach ($images as $im) echo '<img src="' . h(media_url($im['url'])) . '" alt="">'; ?></div><?php endif; ?>
             <?php else: ?>
               <div style="aspect-ratio:1;background:#eee;border-radius:12px"></div>
             <?php endif; ?>
@@ -822,6 +851,11 @@ switch ($page) {
         (function() {
           var panel = document.getElementById('auction-panel');
           if (!panel || '<?= $auction['status'] ?>' !== 'LIVE') return;
+          // Baseline count of bids as rendered on the server. When the poll sees a
+          // different number of bids, someone has bid (or been outbid), so we reload
+          // the whole page — that way every open viewer re-renders with the correct
+          // price, button state, and "you are the top bidder" / "you were outbid" badge.
+          var lastBidCount = <?= (int)count($bids) ?>;
           var endEl = document.getElementById('js-countdown');
           function tick() {
             if (!endEl) return;
@@ -836,18 +870,13 @@ switch ($page) {
           function poll() {
             fetch('index.php?ajax=status&id=' + panel.dataset.id).then(function(r){return r.json();}).then(function(data) {
               if (data.error) return;
-              var priceEl = document.getElementById('js-price');
-              if (priceEl) priceEl.textContent = new Intl.NumberFormat().format(data.current_price) + ' ريال';
-              if (endEl) endEl.dataset.end = data.end_at;
-              var minEl = document.getElementById('js-min-next');
-              if (minEl) minEl.textContent = new Intl.NumberFormat().format(data.min_next_bid) + ' ريال';
-              var body = document.getElementById('js-bids-body');
-              if (body && data.bids) {
-                body.innerHTML = data.bids.length ? data.bids.map(function(b) {
-                  return '<tr' + (b.is_mine ? ' style="background:#fef3c7"' : '') + '><td>' + b.alias + '</td><td>' + new Intl.NumberFormat().format(b.amount) + ' ريال</td><td>' + b.time + '</td></tr>';
-                }).join('') : '<tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr>';
+              // Auction ended, got suspended/cancelled, or a new bid landed → reload
+              // so the server re-renders the panel correctly for this viewer.
+              if (data.status !== 'LIVE' || (data.bids && data.bids.length !== lastBidCount)) {
+                location.reload();
+                return;
               }
-              if (data.status !== 'LIVE') location.reload();
+              if (endEl) endEl.dataset.end = data.end_at;
             }).catch(function(){});
           }
           setInterval(poll, 4000);
@@ -960,7 +989,7 @@ switch ($page) {
           $url = $img->fetchColumn();
         ?>
           <a class="item-card" href="index.php?page=admin_item_edit&id=<?= $it['id'] ?>">
-            <?= $url ? '<img src="' . h($url) . '" alt="">' : '<div style="aspect-ratio:1;background:#eee"></div>' ?>
+            <?= $url ? '<img src="' . h(media_url($url)) . '" alt="">' : '<div style="aspect-ratio:1;background:#eee"></div>' ?>
             <div class="body"><h3><?= h($it['title']) ?></h3><div class="muted"><?= h($it['internal_code'] ?? '—') ?></div></div>
           </a>
         <?php endforeach; ?>
@@ -1001,7 +1030,7 @@ switch ($page) {
             <div class="thumbs">
             <?php foreach ($images as $im): ?>
               <div style="position:relative">
-                <img src="<?= h($im['url']) ?>" alt="">
+                <img src="<?= h(media_url($im['url'])) ?>" alt="">
                 <form method="post" style="position:absolute;top:-6px;left:-6px;margin:0">
                   <input type="hidden" name="action" value="admin_image_delete"><input type="hidden" name="id" value="<?= $im['id'] ?>"><?= csrf_field() ?>
                   <button type="submit" style="padding:0 6px;border-radius:50%;background:#000;color:#fff;font-size:10px">×</button>
