@@ -52,6 +52,10 @@ function db(): PDO {
     $pdo = new PDO('sqlite:' . DB_FILE);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec('PRAGMA foreign_keys = ON');
+    // Wait (up to 5s) for a competing write instead of erroring out. Combined with
+    // BEGIN IMMEDIATE in place_bid(), this serializes concurrent bids so two people
+    // can never both win the same price.
+    $pdo->exec('PRAGMA busy_timeout = 5000');
     if ($isNew) {
         install_schema($pdo);
         seed($pdo);
@@ -243,10 +247,17 @@ class BidError extends Exception {}
 // just a stale page from before an auto-refresh — so the caller refreshes
 // quietly instead of showing an alarming message.
 class AlreadyTopError extends BidError {}
+// Thrown when the price moved before this bid landed (someone else got there
+// first). The requested amount is no longer enough, so the caller just refreshes
+// to the new price and shows the (now higher) bid button.
+class StaleBidError extends BidError {}
 
 function place_bid(int $userId, int $auctionId, int $amount): void {
     $pdo = db();
-    $pdo->beginTransaction();
+    // BEGIN IMMEDIATE takes the write lock right away, so two bids arriving at the
+    // same time are processed one after the other — not both against the old price.
+    // The second one then re-reads the updated price below and gets rejected.
+    $pdo->exec('BEGIN IMMEDIATE');
     try {
         $stmt = $pdo->prepare('SELECT * FROM auctions WHERE id = ?');
         $stmt->execute([$auctionId]);
@@ -268,7 +279,8 @@ function place_bid(int $userId, int $auctionId, int $amount): void {
 
         $minNext = min_next_bid($auction, (bool)$topBid);
         if ($amount < $minNext) {
-            throw new BidError('يجب أن تكون المزايدة ' . money($minNext) . ' على الأقل');
+            // Someone else just bid this price (or higher) a moment ago.
+            throw new StaleBidError('تم رفع السعر للتو، الرجاء إعادة المزايدة');
         }
 
         $newEndAt = $auction['end_at'];
@@ -287,12 +299,12 @@ function place_bid(int $userId, int $auctionId, int $amount): void {
         $pdo->prepare('UPDATE auctions SET current_price = ?, end_at = ? WHERE id = ?')
             ->execute([$amount, $newEndAt, $auctionId]);
 
-        $pdo->commit();
+        $pdo->exec('COMMIT');
 
         write_audit($userId, 'bid_placed', 'Auction', $auctionId, json_encode(['amount' => $amount]));
         if ($extended) write_audit($userId, 'auction_extended', 'Auction', $auctionId, json_encode(['new_end_at' => $newEndAt]));
     } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        try { $pdo->exec('ROLLBACK'); } catch (Exception $ignore) {}
         throw $e;
     }
 }
@@ -340,8 +352,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = $auction ? min_next_bid($auction, (bool)active_bids($auctionId)) : 0;
         try {
             place_bid((int)$user['id'], $auctionId, $amount);
-        } catch (AlreadyTopError $e) {
-            // Stale page (you were already winning) — just refresh to the truth.
+        } catch (AlreadyTopError | StaleBidError $e) {
+            // Either you were already winning, or someone beat you to this price a
+            // moment ago. Neither is a real error — just refresh to the new state,
+            // which shows the current price and a fresh bid button.
             redirect('index.php?page=item&id=' . $auctionId);
         } catch (BidError $e) {
             redirect('index.php?page=item&id=' . $auctionId . '&error=' . urlencode($e->getMessage()));
@@ -555,6 +569,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
     $me = current_user();
     header('Content-Type: application/json; charset=utf-8');
+    // Safari caches identical fetch() GETs aggressively; force it to always ask.
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
     if (!$me) { http_response_code(401); echo json_encode(['error' => 'unauthorized']); exit; }
     $auction = get_auction((int)($_GET['id'] ?? 0));
     if (!$auction) { http_response_code(404); echo json_encode(['error' => 'not_found']); exit; }
@@ -903,7 +920,9 @@ switch ($page) {
           setInterval(tick, 1000);
 
           function poll() {
-            fetch('index.php?ajax=status&id=' + panel.dataset.id).then(function(r){return r.json();}).then(function(data) {
+            // The _ param + no-store keep Safari from serving a cached response
+            // (which would freeze the price and stop auto-refresh).
+            fetch('index.php?ajax=status&id=' + panel.dataset.id + '&_=' + Date.now(), { cache: 'no-store' }).then(function(r){return r.json();}).then(function(data) {
               if (data.error) return;
               // Auction ended, got suspended/cancelled, or a new bid landed → reload
               // so the server re-renders the panel correctly for this viewer.
