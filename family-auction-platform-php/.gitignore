@@ -1,0 +1,3 @@
+auction.db
+uploads/*
+!uploads/.gitkeep

@@ -1,0 +1,145 @@
+import { chromium } from "playwright";
+
+const BASE = "http://127.0.0.1:8100/index.php";
+let failures = 0;
+function check(label, cond) {
+  console.log((cond ? "PASS" : "FAIL") + ": " + label);
+  if (!cond) failures++;
+}
+
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
+
+// ---- Bidder flow ----
+{
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?page=login`);
+  await page.fill('input[name=phone]', "0510000007");
+  await page.fill('input[name=pin]', "10707");
+  await page.click('button[type=submit]');
+  await page.waitForLoadState();
+  check("bidder login lands on home", page.url().includes("index.php") && !page.url().includes("page=login"));
+
+  await page.locator(".item-card").first().click();
+  await page.waitForLoadState();
+  check("item detail page loaded", (await page.locator("body").innerText()).includes("سجل المزايدات"));
+
+  page.on("dialog", (d) => d.accept());
+
+  const rulesLink = page.locator("a", { hasText: "الرجاء الموافقة" });
+  if (await rulesLink.count() > 0) {
+    await rulesLink.click();
+    await page.waitForLoadState();
+    await page.locator("button", { hasText: "قرأت وأوافق" }).click();
+    await page.waitForLoadState();
+  }
+
+  const bidBtn = page.locator("#js-bid-btn");
+  if (await bidBtn.count() > 0 && await bidBtn.isEnabled()) {
+    const priceBefore = await page.locator("#js-price").innerText();
+    await bidBtn.click();
+    await page.waitForLoadState();
+    const priceAfter = await page.locator("#js-price").innerText();
+    check("bid changed the price", priceBefore !== priceAfter);
+    check("now shown as top bidder", (await page.locator("body").innerText()).includes("أنت أعلى مزايد حاليًا"));
+  } else {
+    check("bid button available", false);
+  }
+  await page.close();
+}
+
+// ---- Admin flow ----
+{
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?page=login`);
+  await page.fill('input[name=phone]', "0500000000");
+  await page.fill('input[name=pin]', "998877");
+  await page.click('button[type=submit]');
+  await page.waitForLoadState();
+  check("admin login lands on admin dashboard", page.url().includes("page=admin"));
+
+  // create user
+  await page.goto(`${BASE}?page=admin_user_new`);
+  await page.fill('input[name=real_name]', "مستخدم بي اتش بي");
+  await page.fill('input[name=phone]', "0599990001");
+  await page.fill('input[name=alias]', "مزايد بي اتش بي");
+  await page.fill('input[name=pin]', "554433");
+  await page.locator("main form button[type=submit]").click();
+  await page.waitForLoadState();
+  check("create user redirects to users list", page.url().includes("page=admin_users"));
+  check("new user appears in list", (await page.locator("body").innerText()).includes("مزايد بي اتش بي"));
+
+  // toggle status
+  const row = page.locator("tr", { hasText: "مزايد بي اتش بي" });
+  const toggleBtn = row.locator("button");
+  const before = await toggleBtn.innerText();
+  await toggleBtn.click();
+  await page.waitForLoadState();
+  const after = await page.locator("tr", { hasText: "مزايد بي اتش بي" }).locator("button").innerText();
+  check("toggle changed status label", before !== after);
+
+  // create item with image
+  await page.goto(`${BASE}?page=admin_item_new`);
+  await page.fill('input[name=title]', "قطعة بي اتش بي");
+  await page.fill('textarea[name=description]', "وصف تجريبي");
+  const testImg = "/tmp/test-upload.svg";
+  const fs = await import("node:fs");
+  fs.writeFileSync(testImg, `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#333"/></svg>`);
+  await page.setInputFiles('input[name="images[]"]', testImg);
+  await page.locator("main form button[type=submit]").click();
+  await page.waitForLoadState();
+  check("create item redirects to edit page", page.url().includes("page=admin_item_edit"));
+  const itemId = new URL(page.url()).searchParams.get("id");
+  check("uploaded image shows in edit page", await page.locator(".thumbs img").count() > 0);
+
+  // create auction for the item
+  await page.goto(`${BASE}?page=admin_auction_new&item_id=${itemId}`);
+  const now = new Date(Date.now() - 60000);
+  const end = new Date(Date.now() + 2 * 3600000);
+  function toLocal(d) {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  await page.fill('input[name=opening_price]', "1000");
+  await page.fill('input[name=bid_increment]', "100");
+  await page.fill('input[name=start_at]', toLocal(now));
+  await page.fill('input[name=end_at]', toLocal(end));
+  await page.locator("main form button[type=submit]").click();
+  await page.waitForLoadState();
+  check("create auction redirects to auction edit", page.url().includes("page=admin_auction_edit"));
+
+  // publish it
+  const publishBtn = page.locator("button", { hasText: "نشر المزاد" });
+  if (await publishBtn.count() > 0) {
+    await publishBtn.click();
+    await page.waitForLoadState();
+  }
+  check("auction now shows LIVE badge", (await page.locator("main .badge").first().innerText()).includes("قائم"));
+
+  // suspend / resume
+  const suspendBtn = page.locator("button", { hasText: "تعليق المزاد" });
+  if (await suspendBtn.count() > 0) {
+    await suspendBtn.click();
+    await page.waitForLoadState();
+    check("auction suspended", (await page.locator("body").innerText()).includes("المزاد معلّق"));
+    const resumeBtn = page.locator("button", { hasText: "استئناف المزاد" });
+    await resumeBtn.click();
+    await page.waitForLoadState();
+    check("auction resumed", !(await page.locator("body").innerText()).includes("المزاد معلّق"));
+  } else {
+    check("suspend button present", false);
+  }
+
+  await page.goto(`${BASE}?page=admin_results`);
+  check("results page loads", (await page.locator("body").innerText()).includes("لوحة النتائج"));
+
+  await page.goto(`${BASE}?page=admin_audit`);
+  const auditText = await page.locator("body").innerText();
+  check("audit page loads", auditText.includes("سجل العمليات"));
+  check("audit has entries", auditText.includes("auction_created") || auditText.includes("user_created"));
+
+  await page.close();
+}
+
+console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
+await browser.close();
+process.exit(failures === 0 ? 0 : 1);
