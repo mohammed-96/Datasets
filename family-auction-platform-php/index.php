@@ -11,7 +11,6 @@ const DB_FILE = __DIR__ . '/auction.db';
 const UPLOAD_DIR = __DIR__ . '/uploads';
 const ADMIN_PHONE = '0500000000';
 const ADMIN_PIN = '998877';
-const BIDDER_COUNT = 10;
 const CATEGORIES = ['GOLD' => 'ذهب', 'DIAMOND' => 'ألماس', 'WATCHES' => 'ساعات', 'JEWELRY' => 'مجوهرات', 'COLLECTIBLES' => 'مقتنيات', 'OTHER' => 'أخرى'];
 
 // ---------------------------------------------------------------------------
@@ -99,61 +98,10 @@ function install_schema(PDO $pdo): void {
 }
 
 function seed(PDO $pdo): void {
-    $now = now();
-    $insertUser = $pdo->prepare('INSERT INTO users (real_name, phone, pin_hash, alias, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $insertUser->execute(['مدير المزاد', ADMIN_PHONE, password_hash(ADMIN_PIN, PASSWORD_DEFAULT), 'الإدارة', 'admin', 'active', $now]);
-    $adminId = (int)$pdo->lastInsertId();
-
-    $names = ['عبدالله', 'محمد', 'خالد', 'سارة', 'نورة', 'فهد', 'منيرة', 'تركي', 'هند', 'ماجد'];
-    $bidderIds = [];
-    for ($i = 1; $i <= BIDDER_COUNT; $i++) {
-        $phone = '05' . str_pad((string)(10000000 + $i), 8, '0', STR_PAD_LEFT);
-        $pin = '1' . str_pad((string)$i, 2, '0', STR_PAD_LEFT) . str_pad((string)$i, 2, '0', STR_PAD_LEFT);
-        $insertUser->execute([$names[$i - 1], $phone, password_hash($pin, PASSWORD_DEFAULT), 'مزايد ' . str_pad((string)$i, 2, '0', STR_PAD_LEFT), 'bidder', 'active', $now]);
-        $bidderIds[] = (int)$pdo->lastInsertId();
-    }
-
-    $insertItem = $pdo->prepare('INSERT INTO items (title, description, weight_grams, karat, condition_text, category, internal_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    $insertImage = $pdo->prepare('INSERT INTO item_images (item_id, url, sort_order) VALUES (?, ?, ?)');
-    $insertAuction = $pdo->prepare('INSERT INTO auctions (item_id, opening_price, current_price, bid_increment, start_at, end_at, original_end_at, soft_close_enabled, extension_minutes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 2, ?, ?)');
-    $insertBid = $pdo->prepare('INSERT INTO bids (auction_id, user_id, amount, created_at) VALUES (?, ?, ?, ?)');
-
-    $demo = [
-        ['title' => 'سوار ذهب', 'desc' => 'سوار ذهب أصفر بتصميم كلاسيكي', 'weight' => 32.4, 'karat' => '21', 'cond' => 'جيدة جدًا', 'cat' => 'GOLD', 'code' => 'ITM-001', 'color' => '#b7791f', 'opening' => 5000, 'inc' => 500, 'startOffset' => -3600, 'endOffset' => 7200, 'status' => 'live', 'bids' => 2],
-        ['title' => 'خاتم ألماس', 'desc' => 'خاتم ألماس فاخر بحجر مركزي', 'weight' => 8.1, 'karat' => '18', 'cond' => 'ممتازة', 'cat' => 'DIAMOND', 'code' => 'ITM-002', 'color' => '#0e7490', 'opening' => 8000, 'inc' => 1000, 'startOffset' => 86400, 'endOffset' => 172800, 'status' => 'upcoming', 'bids' => 0],
-        ['title' => 'ساعة يد كلاسيكية', 'desc' => 'ساعة يد رجالية سويسرية الصنع', 'weight' => null, 'karat' => null, 'cond' => 'جيدة', 'cat' => 'WATCHES', 'code' => 'ITM-003', 'color' => '#4c1d95', 'opening' => 3000, 'inc' => 250, 'startOffset' => -259200, 'endOffset' => -86400, 'status' => 'ended', 'bids' => 3],
-    ];
-
-    foreach ($demo as $d) {
-        $insertItem->execute([$d['title'], $d['desc'], $d['weight'], $d['karat'], $d['cond'], $d['cat'], $d['code'], $now]);
-        $itemId = (int)$pdo->lastInsertId();
-
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800"><rect width="800" height="800" fill="' . $d['color'] . '"/><text x="400" y="420" font-size="42" text-anchor="middle" fill="white" font-family="sans-serif">' . htmlspecialchars($d['title']) . '</text></svg>';
-        $filename = 'seed-' . $itemId . '.svg';
-        file_put_contents(UPLOAD_DIR . '/' . $filename, $svg);
-        $insertImage->execute([$itemId, 'uploads/' . $filename, 0]);
-
-        $startAt = date('Y-m-d H:i:s', time() + $d['startOffset']);
-        $endAt = date('Y-m-d H:i:s', time() + $d['endOffset']);
-        $insertAuction->execute([$itemId, $d['opening'], $d['opening'], $d['inc'], $startAt, $endAt, $endAt, strtoupper($d['status']), $now]);
-        $auctionId = (int)$pdo->lastInsertId();
-
-        $price = $d['opening'];
-        for ($i = 0; $i < $d['bids']; $i++) {
-            $price += $d['inc'];
-            $bidder = $bidderIds[$i % count($bidderIds)];
-            $bidTime = date('Y-m-d H:i:s', strtotime($startAt) + ($i + 1) * 60);
-            $insertBid->execute([$auctionId, $bidder, $price, $bidTime]);
-        }
-        if ($d['bids'] > 0) {
-            $winnerId = $bidderIds[($d['bids'] - 1) % count($bidderIds)];
-            if ($d['status'] === 'ended') {
-                $pdo->prepare('UPDATE auctions SET current_price = ?, winner_user_id = ?, winning_bid = ? WHERE id = ?')->execute([$price, $winnerId, $price, $auctionId]);
-            } else {
-                $pdo->prepare('UPDATE auctions SET current_price = ? WHERE id = ?')->execute([$price, $auctionId]);
-            }
-        }
-    }
+    // Only the admin account is seeded. Add real bidders from admin -> المستخدمون,
+    // and real items/auctions from admin -> القطع / المزادات.
+    $pdo->prepare('INSERT INTO users (real_name, phone, pin_hash, alias, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        ->execute(['مدير المزاد', ADMIN_PHONE, password_hash(ADMIN_PIN, PASSWORD_DEFAULT), 'الإدارة', 'admin', 'active', now()]);
 }
 
 // ---------------------------------------------------------------------------

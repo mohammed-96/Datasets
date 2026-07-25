@@ -17,30 +17,22 @@ any PHP host and it works.
    make sure it's writable (right-click → Permissions → `755`, or `775` if uploads
    fail).
 3. Visit the site. The very first request auto-creates `auction.db` (SQLite) next
-   to `index.php` and seeds an admin account plus 10 bidder accounts.
-4. Log in with the admin account below and start adding real items/auctions —
-   or just delete the demo data from **admin → القطع / المزادات** first.
+   to `index.php` and seeds a single admin account — no demo bidders, items, or
+   auctions.
+4. Log in with the admin account below, then add real bidders from
+   **admin → المستخدمون** and real items/auctions from **admin → القطع / المزادات**.
 
 That's it — no database to create in phpMyAdmin, no environment variables, no
 `npm install`.
 
-## Default seeded logins
+## Default seeded login
 
 | Alias | Phone | PIN |
 |---|---|---|
 | الإدارة (admin) | `0500000000` | `998877` |
-| مزايد 01 | `0510000001` | `10101` |
-| مزايد 02 | `0510000002` | `10202` |
-| مزايد 03 | `0510000003` | `10303` |
-| مزايد 04 | `0510000004` | `10404` |
-| مزايد 05 | `0510000005` | `10505` |
-| مزايد 06 | `0510000006` | `10606` |
-| مزايد 07 | `0510000007` | `10707` |
-| مزايد 08 | `0510000008` | `10808` |
-| مزايد 09 | `0510000009` | `10909` |
-| مزايد 10 | `0510000010` | `11010` |
 
-**Change the admin PIN and delete/replace the demo bidder accounts before real use.**
+**Change the admin PIN after first login.** No other accounts are created —
+add every real bidder yourself from the admin panel.
 
 ## What's included
 

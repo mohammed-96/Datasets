@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import fs from "node:fs";
 
 const BASE = "http://127.0.0.1:8100/index.php";
 let failures = 0;
@@ -9,45 +10,11 @@ function check(label, cond) {
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 
-// ---- Bidder flow ----
-{
-  const page = await browser.newPage();
-  await page.goto(`${BASE}?page=login`);
-  await page.fill('input[name=phone]', "0510000007");
-  await page.fill('input[name=pin]', "10707");
-  await page.click('button[type=submit]');
-  await page.waitForLoadState();
-  check("bidder login lands on home", page.url().includes("index.php") && !page.url().includes("page=login"));
+const TEST_PHONE = "0599990001";
+const TEST_PIN = "554433";
+let auctionId = null;
 
-  await page.locator(".item-card").first().click();
-  await page.waitForLoadState();
-  check("item detail page loaded", (await page.locator("body").innerText()).includes("سجل المزايدات"));
-
-  page.on("dialog", (d) => d.accept());
-
-  const rulesLink = page.locator("a", { hasText: "الرجاء الموافقة" });
-  if (await rulesLink.count() > 0) {
-    await rulesLink.click();
-    await page.waitForLoadState();
-    await page.locator("button", { hasText: "قرأت وأوافق" }).click();
-    await page.waitForLoadState();
-  }
-
-  const bidBtn = page.locator("#js-bid-btn");
-  if (await bidBtn.count() > 0 && await bidBtn.isEnabled()) {
-    const priceBefore = await page.locator("#js-price").innerText();
-    await bidBtn.click();
-    await page.waitForLoadState();
-    const priceAfter = await page.locator("#js-price").innerText();
-    check("bid changed the price", priceBefore !== priceAfter);
-    check("now shown as top bidder", (await page.locator("body").innerText()).includes("أنت أعلى مزايد حاليًا"));
-  } else {
-    check("bid button available", false);
-  }
-  await page.close();
-}
-
-// ---- Admin flow ----
+// ---- Admin flow: create a bidder + item + live auction from scratch ----
 {
   const page = await browser.newPage();
   await page.goto(`${BASE}?page=login`);
@@ -57,18 +24,18 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
   await page.waitForLoadState();
   check("admin login lands on admin dashboard", page.url().includes("page=admin"));
 
-  // create user
+  // create bidder
   await page.goto(`${BASE}?page=admin_user_new`);
   await page.fill('input[name=real_name]', "مستخدم بي اتش بي");
-  await page.fill('input[name=phone]', "0599990001");
+  await page.fill('input[name=phone]', TEST_PHONE);
   await page.fill('input[name=alias]', "مزايد بي اتش بي");
-  await page.fill('input[name=pin]', "554433");
+  await page.fill('input[name=pin]', TEST_PIN);
   await page.locator("main form button[type=submit]").click();
   await page.waitForLoadState();
   check("create user redirects to users list", page.url().includes("page=admin_users"));
   check("new user appears in list", (await page.locator("body").innerText()).includes("مزايد بي اتش بي"));
 
-  // toggle status
+  // toggle status twice to leave it active but confirm the control works
   const row = page.locator("tr", { hasText: "مزايد بي اتش بي" });
   const toggleBtn = row.locator("button");
   const before = await toggleBtn.innerText();
@@ -76,13 +43,14 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
   await page.waitForLoadState();
   const after = await page.locator("tr", { hasText: "مزايد بي اتش بي" }).locator("button").innerText();
   check("toggle changed status label", before !== after);
+  await page.locator("tr", { hasText: "مزايد بي اتش بي" }).locator("button").click();
+  await page.waitForLoadState();
 
   // create item with image
   await page.goto(`${BASE}?page=admin_item_new`);
   await page.fill('input[name=title]', "قطعة بي اتش بي");
   await page.fill('textarea[name=description]', "وصف تجريبي");
   const testImg = "/tmp/test-upload.svg";
-  const fs = await import("node:fs");
   fs.writeFileSync(testImg, `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#333"/></svg>`);
   await page.setInputFiles('input[name="images[]"]', testImg);
   await page.locator("main form button[type=submit]").click();
@@ -106,6 +74,7 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
   await page.locator("main form button[type=submit]").click();
   await page.waitForLoadState();
   check("create auction redirects to auction edit", page.url().includes("page=admin_auction_edit"));
+  auctionId = new URL(page.url()).searchParams.get("id");
 
   // publish it
   const publishBtn = page.locator("button", { hasText: "نشر المزاد" });
@@ -137,6 +106,43 @@ const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromi
   check("audit page loads", auditText.includes("سجل العمليات"));
   check("audit has entries", auditText.includes("auction_created") || auditText.includes("user_created"));
 
+  await page.close();
+}
+
+// ---- Bidder flow: log in as the user just created and bid on it ----
+{
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?page=login`);
+  await page.fill('input[name=phone]', TEST_PHONE);
+  await page.fill('input[name=pin]', TEST_PIN);
+  await page.click('button[type=submit]');
+  await page.waitForLoadState();
+  check("bidder login lands on home", page.url().includes("index.php") && !page.url().includes("page=login"));
+
+  await page.goto(`${BASE}?page=item&id=${auctionId}`);
+  check("item detail page loaded", (await page.locator("body").innerText()).includes("سجل المزايدات"));
+
+  page.on("dialog", (d) => d.accept());
+
+  const rulesLink = page.locator("a", { hasText: "الرجاء الموافقة" });
+  if (await rulesLink.count() > 0) {
+    await rulesLink.click();
+    await page.waitForLoadState();
+    await page.locator("button", { hasText: "قرأت وأوافق" }).click();
+    await page.waitForLoadState();
+  }
+
+  const bidBtn = page.locator("#js-bid-btn");
+  if (await bidBtn.count() > 0 && await bidBtn.isEnabled()) {
+    await bidBtn.click();
+    await page.waitForLoadState();
+    const priceAfter = await page.locator("#js-price").innerText();
+    check("price shows the bid amount", priceAfter.includes("1,000") || priceAfter.includes("1000"));
+    check("now shown as top bidder", (await page.locator("body").innerText()).includes("أنت أعلى مزايد حاليًا"));
+    check("bid history has an entry", (await page.locator("body").innerText()).includes("مزايد بي اتش بي"));
+  } else {
+    check("bid button available", false);
+  }
   await page.close();
 }
 
