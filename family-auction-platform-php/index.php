@@ -868,9 +868,16 @@ switch ($page) {
           <div>
             <div class="card" id="auction-panel" data-id="<?= $id ?>">
               <?php if ($auction['status'] === 'LIVE'): ?>
-                <div class="muted">السعر الحالي</div>
+                <div class="muted"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
                 <div class="price" id="js-price"><?= money((int)$auction['current_price']) ?></div>
                 <?php if ($isTop): ?><p class="badge live">أنت أعلى مزايد حاليًا</p><?php elseif ($hasUserBid): ?><p class="badge cancelled">تم تجاوز مزايدتك</p><?php endif; ?>
+                <p class="muted" style="margin:6px 0">
+                  <?php if (!$hasBids): ?>
+                    أول مزايدة تبدأ من سعر الافتتاح، ثم تزيد <?= money((int)$auction['bid_increment']) ?> في كل مزايدة.
+                  <?php else: ?>
+                    قيمة كل زيادة: <?= money((int)$auction['bid_increment']) ?>
+                  <?php endif; ?>
+                </p>
                 <div class="muted">ينتهي بعد <b id="js-countdown" data-end="<?= h($auction['end_at']) ?>"></b></div>
                 <p class="muted">ينتهي: <?= fmt_dt($auction['end_at']) ?></p>
                 <?php if (!$user['accepted_rules_at']): ?>
@@ -883,7 +890,7 @@ switch ($page) {
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
                     <input type="hidden" name="amount" value="<?= $minNext ?>">
                     <?= csrf_field() ?>
-                    <button type="submit" style="width:100%;margin-top:10px" id="js-bid-btn">زايد بـ <span id="js-min-next"><?= money($minNext) ?></span></button>
+                    <button type="submit" style="width:100%;margin-top:10px" id="js-bid-btn"><?php if (!$hasBids): ?>ابدأ المزايدة بـ <?= money($minNext) ?> (سعر الافتتاح)<?php else: ?>زايد بـ <span id="js-min-next"><?= money($minNext) ?></span><?php endif; ?></button>
                   </form>
                 <?php endif; ?>
               <?php elseif ($auction['status'] === 'UPCOMING'): ?>
