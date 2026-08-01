@@ -258,6 +258,28 @@ let auctionId = null;
     check("tapping a thumbnail switches the image",
       await page.locator("#gal-thumbs img").nth(1).getAttribute("class") === "on");
   }
+
+  // Lots must never be shown cropped, and must open full screen.
+  const fit = await page.evaluate(() => {
+    const i = document.querySelector(".gal-track img");
+    const cs = getComputedStyle(i);
+    return { fit: cs.objectFit, card: getComputedStyle(document.querySelector(".item-card img") || i).objectFit };
+  });
+  check("gallery shows the whole photo (no crop)", fit.fit === "contain");
+  check("lot cards show the whole photo (no crop)", fit.card === "contain");
+
+  check("viewer starts closed", await page.locator("#lightbox").isHidden());
+  await page.locator(".gal-track img").first().click();
+  await page.waitForTimeout(400);
+  check("tapping a photo opens the full-screen viewer", await page.locator("#lightbox").isVisible());
+  const small = await page.locator("#lb-img").boundingBox();
+  await page.locator("#lb-img").click();
+  await page.waitForTimeout(400);
+  const big = await page.locator("#lb-img").boundingBox();
+  check("tapping inside the viewer magnifies", big.width > small.width * 1.5);
+  await page.locator("#lb-close").click();
+  await page.waitForTimeout(300);
+  check("viewer closes", await page.locator("#lightbox").isHidden());
   await page.close();
 }
 

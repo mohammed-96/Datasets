@@ -717,8 +717,10 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
 
   .item-card { display: block; background: none; }
   .item-card .shot { overflow: hidden; background: var(--paper); border-radius: var(--radius); }
+  /* contain, not cover: an auction lot must be shown whole, never cropped. The
+     paper background fills whatever the photo's proportions leave over. */
   .item-card img {
-    width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block;
+    width: 100%; aspect-ratio: 1; object-fit: contain; display: block; padding: 10px;
     transition: transform .7s cubic-bezier(.2,.7,.3,1);
   }
   .item-card:hover img { transform: scale(1.035); }
@@ -803,9 +805,40 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .gal-track::-webkit-scrollbar { display: none; }
+  /* The lot's own photographs are shown complete — whatever their proportions —
+     and can be opened full screen to inspect detail. */
   .gal-track img {
-    flex: 0 0 100%; width: 100%; aspect-ratio: 4/5; object-fit: cover;
-    scroll-snap-align: center; display: block;
+    flex: 0 0 100%; width: 100%; aspect-ratio: 1; object-fit: contain;
+    scroll-snap-align: center; display: block; cursor: zoom-in; padding: 8px;
+  }
+  .gal-hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .thumbs img { object-fit: contain; background: var(--paper); padding: 4px; }
+
+  /* Full-screen viewer with a tap-to-magnify step */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200; background: rgba(18,15,12,.97);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox[hidden] { display: none; }
+  .lb-stage {
+    width: 100%; height: 100%; overflow: auto; -webkit-overflow-scrolling: touch;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lb-stage img {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    cursor: zoom-in; transition: none;
+  }
+  .lb-stage.zoomed { align-items: flex-start; justify-content: flex-start; }
+  .lb-stage.zoomed img { max-width: none; max-height: none; width: 240%; cursor: zoom-out; }
+  .lb-close {
+    position: absolute; top: calc(14px + env(safe-area-inset-top)); inset-inline-end: 16px;
+    z-index: 2; width: 44px; height: 44px; padding: 0; border-radius: 999px;
+    background: rgba(255,255,255,.16); color: #fff; font-size: 24px; line-height: 1;
+  }
+  .lb-close:hover { background: rgba(255,255,255,.28); }
+  .lb-tip {
+    position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); inset-inline: 0;
+    text-align: center; color: rgba(255,255,255,.65); font-size: 12.5px;
   }
   .gal-dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
   .gal-dots span {
@@ -833,7 +866,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   /* Featured lot — the editorial centrepiece of the homepage */
   .feature { margin: 8px 0 12px; }
   .feature .shot { background: var(--paper); border-radius: var(--radius); overflow: hidden; }
-  .feature .shot img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+  .feature .shot img { width: 100%; aspect-ratio: 4/3; object-fit: contain; display: block; padding: 14px; }
   .feature .meta { padding-top: 26px; text-align: center; }
   .feature h2 { font-size: 40px; margin: 8px 0 12px; }
   .feature .excerpt {
@@ -1038,18 +1071,41 @@ function layout_end(): void { ?>
   <div class="copy">© <?= date('Y') ?> مزاد الذكريات — جميع الحقوق محفوظة</div>
   <div class="sig">مدار البيان</div>
 </footer>
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" id="lb-close" aria-label="إغلاق">&times;</button>
+  <div class="lb-stage" id="lb-stage"><img id="lb-img" alt=""></div>
+  <div class="lb-tip">اضغط على الصورة للتكبير — اضغط خارجها للإغلاق</div>
+</div>
 <script>
 /* Audible bid feedback — a soft chime plus a spoken result, so an approved or
    rejected bid is unmistakable even without reading the screen. Sound is
    generated in the browser (no audio files to upload). */
 (function () {
-  var ctx = null;
-  function unlock() {                     // must run inside a tap to satisfy iOS
+  var ctx = null, primed = false;
+  // iOS only lets audio start from a real tap, and only after the context has
+  // actually played something. So we create the context, resume it, AND push a
+  // silent buffer through it on the very first touch anywhere on the page —
+  // long before the bid — which is what makes the later chime reliable.
+  function unlock() {
     try {
       if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
       if (ctx.state === 'suspended') ctx.resume();
+      if (!primed) {
+        var buf = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination); src.start(0);
+        // Speech has the same gesture rule; a silent utterance opens the door.
+        if (window.speechSynthesis) {
+          var warm = new SpeechSynthesisUtterance(' ');
+          warm.volume = 0; warm.lang = 'ar-SA';
+          window.speechSynthesis.speak(warm);
+        }
+        primed = true;
+      }
     } catch (e) { ctx = null; }
   }
+  ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, unlock, { capture: true, passive: true });
+  });
   function tone(freq, startAt, dur, peak) {
     if (!ctx) return;
     var osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + startAt;
@@ -1116,6 +1172,36 @@ function layout_end(): void { ?>
     barBid.addEventListener('click', function () {
       var f = document.getElementById('bid-form');
       if (f) f.requestSubmit();
+    });
+  }
+
+  // Full-screen image viewer. Tap a lot photo to open it whole, tap again to
+  // magnify and pan, tap the backdrop or Escape to close.
+  var lb = document.getElementById('lightbox');
+  if (lb) {
+    var lbImg = document.getElementById('lb-img'),
+        lbStage = document.getElementById('lb-stage');
+    function openLb(src, alt) {
+      lbImg.src = src; lbImg.alt = alt || '';
+      lbStage.classList.remove('zoomed');
+      lb.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+    function closeLb() {
+      lb.hidden = true; lbImg.src = '';
+      document.body.style.overflow = '';
+    }
+    document.querySelectorAll('.gal-track img').forEach(function (img) {
+      img.addEventListener('click', function () { openLb(img.src, img.alt); });
+    });
+    lbImg.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lbStage.classList.toggle('zoomed');
+    });
+    lbStage.addEventListener('click', closeLb);          // tapping the backdrop closes
+    document.getElementById('lb-close').addEventListener('click', closeLb);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !lb.hidden) closeLb();
     });
   }
 
@@ -1484,6 +1570,7 @@ switch ($page) {
                     <?php endforeach; ?>
                   </div>
                 <?php endif; ?>
+                <div class="gal-hint">اضغط على الصورة لعرضها بالحجم الكامل</div>
               </div>
             <?php else: ?>
               <div style="aspect-ratio:4/5;background:var(--paper);border-radius:var(--radius)"></div>
