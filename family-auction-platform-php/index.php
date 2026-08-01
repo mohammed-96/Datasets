@@ -1104,85 +1104,7 @@ function layout_end(): void { ?>
   <div class="lb-tip" id="lb-tip">اسحب للتنقّل — اضغط على الصورة للتكبير</div>
 </div>
 <script>
-/* Audible bid feedback — a soft chime plus a spoken result, so an approved or
-   rejected bid is unmistakable even without reading the screen. Sound is
-   generated in the browser (no audio files to upload). */
 (function () {
-  var ctx = null, primed = false;
-  // iOS only lets audio start from a real tap, and only after the context has
-  // actually played something. So we create the context, resume it, AND push a
-  // silent buffer through it on the very first touch anywhere on the page —
-  // long before the bid — which is what makes the later chime reliable.
-  function unlock() {
-    try {
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === 'suspended') ctx.resume();
-      if (!primed) {
-        var buf = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(ctx.destination); src.start(0);
-        // Speech has the same gesture rule; a silent utterance opens the door.
-        if (window.speechSynthesis) {
-          var warm = new SpeechSynthesisUtterance(' ');
-          warm.volume = 0; warm.lang = 'ar-SA';
-          window.speechSynthesis.speak(warm);
-        }
-        primed = true;
-      }
-    } catch (e) { ctx = null; }
-  }
-  ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach(function (ev) {
-    document.addEventListener(ev, unlock, { capture: true, passive: true });
-  });
-  function tone(freq, startAt, dur, peak, type) {
-    if (!ctx) return;
-    var osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + startAt;
-    osc.type = type || 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    gain.gain.setValueAtTime(0.0001, t);                        // soft attack/decay
-    gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);     // keeps it musical,
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);    // never a harsh beep
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(t); osc.stop(t + dur + 0.02);
-  }
-  function say(text) {
-    try {
-      if (!window.speechSynthesis) return;
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ar-SA'; u.rate = 1;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
-  }
-  // Success: a rising major arpeggio that resolves upward — the "it went through"
-  // sound. Failure: two blunt low buzzes on a square wave — clearly a rejection.
-  function successSound() {
-    tone(523.25, 0,    .16, .17);   // C5
-    tone(659.25, .085, .16, .17);   // E5
-    tone(783.99, .17,  .18, .18);   // G5
-    tone(1046.5, .255, .42, .20);   // C6, held to close the phrase
-  }
-  function rejectSound() {
-    tone(207.65, 0,    .17, .15, 'square');   // G#3
-    tone(155.56, .19,  .30, .15, 'square');   // D#3 — a flat, downward answer
-  }
-  function feedback(ok) {
-    unlock();
-    if (ok) { successSound(); say('تمت المزايدة بنجاح'); }
-    else    { rejectSound();  say('لم تتم المزايدة'); }
-  }
-  window.__bidFeedback = feedback;
-  window.__unlockAudio = unlock;
-
-  // Sound the result carried in the URL after a normal (non-JS) form post.
-  var m = location.search.match(/[?&]bid=(ok|no)\b/);
-  if (m) {
-    var ok = m[1] === 'ok';
-    document.addEventListener('click', function once() {   // fallback if autoplay is blocked
-      document.removeEventListener('click', once);
-    });
-    setTimeout(function () { feedback(ok); }, 120);
-  }
-
   // Every countdown on the page, wherever it appears. Reads data-end each tick
   // so a soft-close extension picked up by polling is reflected immediately.
   var counters = document.querySelectorAll('.countdown');
@@ -1324,7 +1246,6 @@ function layout_end(): void { ?>
     }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      unlock();                            // inside the tap, so the sound is allowed
       var amountEl = form.querySelector('input[name=amount]'),
           btn = form.querySelector('button[type=submit]');
       if (btn && btn.disabled) return;
@@ -1335,8 +1256,8 @@ function layout_end(): void { ?>
       if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
       fetch('index.php', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
         .then(function (r) {
-          var ok = r.url.indexOf('bid=ok') !== -1;
-          feedback(ok);                    // plays in full — the page does not navigate
+          // A rejected bid explains itself in a banner; an accepted one shows up
+          // in the panel below, which refreshes a moment later.
           var m = r.url.match(/[?&]error=([^&]*)/);
           banner(m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null);
           if (btn) btn.style.opacity = '';
@@ -1842,9 +1763,7 @@ switch ($page) {
               body     = document.getElementById('js-bids-body'),
               form     = document.getElementById('bid-form'),
               btn      = document.getElementById('js-bid-btn'),
-              barBtn   = document.getElementById('js-bar-bid'),
-              wasTop   = <?= $isTop ? 'true' : 'false' ?>,
-              seen     = <?= (int)count($bids) ?>;
+              barBtn   = document.getElementById('js-bar-bid');
 
           function setLabels(data) {
             var label = (data.has_bids ? 'زايد بـ ' : 'ابدأ المزايدة بـ ') + data.min_next_text;
@@ -1877,11 +1796,6 @@ switch ($page) {
               }).join('') : '<tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr>';
             }
             setLabels(data);
-
-            // Losing the lead is worth hearing, even from another tab.
-            if (wasTop && !data.is_top_bidder) window.__bidFeedback(false);
-            wasTop = !!data.is_top_bidder;
-            seen = data.bids ? data.bids.length : seen;
           }
           window.__applyStatus = apply;
 

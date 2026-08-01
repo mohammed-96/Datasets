@@ -40,17 +40,15 @@ add every real bidder yourself from the admin panel.
 - **Public browsing** — anyone can view the catalogue, item pages, the story page
   and live prices without an account. Bidding, "مزايداتي" and the admin area still
   require a login.
-- **Swipeable image gallery** — items with several photos can be browsed by swiping
-  or by tapping a thumbnail, with dots showing the position.
-- **Typography** — Amiri for headings and IBM Plex Sans Arabic for the interface,
-  loaded without blocking the first paint, falling back to iOS's SF Arabic.
-- **Audible bid feedback** — an approved bid plays a rising chime and says
-  "تمت المزايدة"; a rejected one plays a low tone and says "لم تتم المزايدة".
-  Generated in the browser, so there are no audio files to upload.
+- **Image gallery** — swipe or tap a thumbnail to browse a lot's photos, and tap
+  any photo to open it full screen, where it can be magnified and paged through.
+- **Typography** — Amiri for headings and El Messiri for the interface, loaded
+  without blocking the first paint, falling back to iOS's SF Arabic.
 - Alias-only bidder identity — real names/phones are only ever shown to the admin
 - Bidding with minimum-increment enforcement, self-outbid prevention, and
   soft-close anti-sniping (extends the auction if a bid lands in the last N minutes)
-- Live-ish price/timer/bid-history updates via lightweight polling (no WebSockets)
+- The lot page updates in place as bids land — price, countdown, bid history and
+  the button's state — without reloading the page (lightweight polling, no WebSockets)
 - Admin: users, items (with image upload), auctions (draft → publish → live,
   suspend/resume, cancel), results board, append-only audit log
 
