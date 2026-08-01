@@ -157,15 +157,19 @@ let auctionId = null;
 
   const bidBtn = page.locator("#js-bid-btn");
   if (await bidBtn.count() > 0 && await bidBtn.isEnabled()) {
+    const urlBefore = page.url();
     await bidBtn.click();
-    // The bid posts in the background, plays the result chime, then navigates —
-    // so wait for that deferred navigation rather than the click itself.
-    await page.waitForURL(/bid=(ok|no)/, { timeout: 10000 });
-    await page.waitForLoadState();
+    // The bid posts in the background and the panel updates in place — the page
+    // deliberately does NOT navigate, so the result sound can play out in full.
+    await page.waitForFunction(
+      () => document.getElementById("js-bid-btn") && document.getElementById("js-bid-btn").disabled,
+      null, { timeout: 10000 });
+    check("bidding does not reload the page", page.url() === urlBefore);
     const priceAfter = await page.locator("#js-price").innerText();
     check("price shows the bid amount", priceAfter.includes("1,000") || priceAfter.includes("1000"));
     check("now shown as top bidder", (await page.locator("body").innerText()).includes("أنت أعلى مزايد حاليًا"));
     check("bid history has an entry", (await page.locator("body").innerText()).includes("مزايد بي اتش بي"));
+    check("my own bid row is highlighted", await page.locator("#js-bids-body tr.mine").count() >= 1);
   } else {
     check("bid button available", false);
   }
@@ -259,14 +263,14 @@ let auctionId = null;
       await page.locator("#gal-thumbs img").nth(1).getAttribute("class") === "on");
   }
 
-  // Lots must never be shown cropped, and must open full screen.
-  const fit = await page.evaluate(() => {
-    const i = document.querySelector(".gal-track img");
-    const cs = getComputedStyle(i);
-    return { fit: cs.objectFit, card: getComputedStyle(document.querySelector(".item-card img") || i).objectFit };
-  });
-  check("gallery shows the whole photo (no crop)", fit.fit === "contain");
-  check("lot cards show the whole photo (no crop)", fit.card === "contain");
+  // The catalogue fills its frames edge to edge; the viewer is where the whole,
+  // uncropped photo is seen.
+  const fit = await page.evaluate(() => ({
+    gallery: getComputedStyle(document.querySelector(".gal-track img")).objectFit,
+    viewer: getComputedStyle(document.getElementById("lb-img")).objectFit,
+  }));
+  check("gallery fills its frame edge to edge", fit.gallery === "cover");
+  check("viewer shows the whole photo uncropped", fit.viewer === "contain");
 
   check("viewer starts closed", await page.locator("#lightbox").isHidden());
   await page.locator(".gal-track img").first().click();

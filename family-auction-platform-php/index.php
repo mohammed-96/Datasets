@@ -613,6 +613,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
         'end_at' => $auction['end_at'],
         'end_ts' => strtotime($auction['end_at']) * 1000,   // timezone-proof, for the countdown
         'min_next_bid' => min_next_bid($auction, $hasBids),
+        'min_next_text' => money(min_next_bid($auction, $hasBids)),
+        'price_text' => money((int)$auction['current_price']),
+        'bidders' => bidder_count((int)$auction['id']),
+        'has_bids' => $hasBids,
         'is_top_bidder' => $topBid && (int)$topBid['user_id'] === $myId,
         'has_user_bid' => (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === $myId),
         'winner_alias' => null,
@@ -717,10 +721,10 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
 
   .item-card { display: block; background: none; }
   .item-card .shot { overflow: hidden; background: var(--paper); border-radius: var(--radius); }
-  /* contain, not cover: an auction lot must be shown whole, never cropped. The
-     paper background fills whatever the photo's proportions leave over. */
+  /* Photographs fill their frame edge to edge — that is what makes the catalogue
+     look composed. The complete, uncropped photo is one tap away in the viewer. */
   .item-card img {
-    width: 100%; aspect-ratio: 1; object-fit: contain; display: block; padding: 10px;
+    width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block;
     transition: transform .7s cubic-bezier(.2,.7,.3,1);
   }
   .item-card:hover img { transform: scale(1.035); }
@@ -772,6 +776,10 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   }
   table td { padding: 14px 10px; text-align: right; border-bottom: 1px solid var(--line); }
   table td:nth-child(2) { font-variant-numeric: tabular-nums; }
+  /* Your own bids stand out plainly in the history — a gold band and a marker. */
+  tr.mine td { background: rgba(156,124,60,.16); font-weight: 600; color: var(--gold-dark); }
+  tr.mine td:first-child { box-shadow: inset -3px 0 0 var(--gold); }
+  tr.mine td:first-child::after { content: ' (أنت)'; font-weight: 500; opacity: .75; }
 
   .error {
     background: none; border: 1px solid #e8cfc8; color: #a3341f; padding: 14px 18px;
@@ -805,14 +813,11 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .gal-track::-webkit-scrollbar { display: none; }
-  /* The lot's own photographs are shown complete — whatever their proportions —
-     and can be opened full screen to inspect detail. */
   .gal-track img {
-    flex: 0 0 100%; width: 100%; aspect-ratio: 1; object-fit: contain;
-    scroll-snap-align: center; display: block; cursor: zoom-in; padding: 8px;
+    flex: 0 0 100%; width: 100%; aspect-ratio: 4/5; object-fit: cover;
+    scroll-snap-align: center; display: block; cursor: zoom-in;
   }
   .gal-hint { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
-  .thumbs img { object-fit: contain; background: var(--paper); padding: 4px; }
 
   /* Full-screen viewer with a tap-to-magnify step */
   .lightbox {
@@ -830,15 +835,32 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   }
   .lb-stage.zoomed { align-items: flex-start; justify-content: flex-start; }
   .lb-stage.zoomed img { max-width: none; max-height: none; width: 240%; cursor: zoom-out; }
-  .lb-close {
-    position: absolute; top: calc(14px + env(safe-area-inset-top)); inset-inline-end: 16px;
-    z-index: 2; width: 44px; height: 44px; padding: 0; border-radius: 999px;
-    background: rgba(255,255,255,.16); color: #fff; font-size: 24px; line-height: 1;
+  /* Top bar: an unmistakable close control, plus which photo you're on. */
+  .lb-bar {
+    position: absolute; top: 0; inset-inline: 0; z-index: 3;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0));
   }
-  .lb-close:hover { background: rgba(255,255,255,.28); }
+  .lb-close {
+    background: #fff; color: #16130f; padding: 10px 20px; border-radius: 999px;
+    font-size: 14.5px; font-weight: 600;
+  }
+  .lb-close:hover { background: #fff; opacity: .88; }
+  .lb-count { color: rgba(255,255,255,.85); font-size: 14px; font-variant-numeric: tabular-nums; }
+  /* Big edge targets for moving between photos without leaving the viewer. */
+  .lb-nav {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+    width: 48px; height: 48px; padding: 0; border-radius: 999px;
+    background: rgba(255,255,255,.18); color: #fff; font-size: 30px; line-height: 1;
+  }
+  .lb-nav:hover { background: rgba(255,255,255,.32); }
+  .lb-nav[hidden] { display: none; }
+  .lb-prev { inset-inline-end: 12px; }
+  .lb-next { inset-inline-start: 12px; }
   .lb-tip {
     position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); inset-inline: 0;
-    text-align: center; color: rgba(255,255,255,.65); font-size: 12.5px;
+    text-align: center; color: rgba(255,255,255,.65); font-size: 12.5px; pointer-events: none;
   }
   .gal-dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
   .gal-dots span {
@@ -866,7 +888,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   /* Featured lot — the editorial centrepiece of the homepage */
   .feature { margin: 8px 0 12px; }
   .feature .shot { background: var(--paper); border-radius: var(--radius); overflow: hidden; }
-  .feature .shot img { width: 100%; aspect-ratio: 4/3; object-fit: contain; display: block; padding: 14px; }
+  .feature .shot img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
   .feature .meta { padding-top: 26px; text-align: center; }
   .feature h2 { font-size: 40px; margin: 8px 0 12px; }
   .feature .excerpt {
@@ -1072,9 +1094,14 @@ function layout_end(): void { ?>
   <div class="sig">مدار البيان</div>
 </footer>
 <div class="lightbox" id="lightbox" hidden>
-  <button class="lb-close" id="lb-close" aria-label="إغلاق">&times;</button>
+  <div class="lb-bar">
+    <button class="lb-close" id="lb-close">إغلاق &times;</button>
+    <span class="lb-count" id="lb-count"></span>
+  </div>
+  <button class="lb-nav lb-prev" id="lb-prev" aria-label="السابق">&#8250;</button>
   <div class="lb-stage" id="lb-stage"><img id="lb-img" alt=""></div>
-  <div class="lb-tip">اضغط على الصورة للتكبير — اضغط خارجها للإغلاق</div>
+  <button class="lb-nav lb-next" id="lb-next" aria-label="التالي">&#8249;</button>
+  <div class="lb-tip" id="lb-tip">اسحب للتنقّل — اضغط على الصورة للتكبير</div>
 </div>
 <script>
 /* Audible bid feedback — a soft chime plus a spoken result, so an approved or
@@ -1106,13 +1133,13 @@ function layout_end(): void { ?>
   ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach(function (ev) {
     document.addEventListener(ev, unlock, { capture: true, passive: true });
   });
-  function tone(freq, startAt, dur, peak) {
+  function tone(freq, startAt, dur, peak, type) {
     if (!ctx) return;
     var osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + startAt;
-    osc.type = 'sine';
+    osc.type = type || 'sine';
     osc.frequency.setValueAtTime(freq, t);
     gain.gain.setValueAtTime(0.0001, t);                        // soft attack/decay
-    gain.gain.exponentialRampToValueAtTime(peak, t + 0.03);     // keeps it gentle,
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);     // keeps it musical,
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);    // never a harsh beep
     osc.connect(gain); gain.connect(ctx.destination);
     osc.start(t); osc.stop(t + dur + 0.02);
@@ -1126,10 +1153,22 @@ function layout_end(): void { ?>
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
+  // Success: a rising major arpeggio that resolves upward — the "it went through"
+  // sound. Failure: two blunt low buzzes on a square wave — clearly a rejection.
+  function successSound() {
+    tone(523.25, 0,    .16, .17);   // C5
+    tone(659.25, .085, .16, .17);   // E5
+    tone(783.99, .17,  .18, .18);   // G5
+    tone(1046.5, .255, .42, .20);   // C6, held to close the phrase
+  }
+  function rejectSound() {
+    tone(207.65, 0,    .17, .15, 'square');   // G#3
+    tone(155.56, .19,  .30, .15, 'square');   // D#3 — a flat, downward answer
+  }
   function feedback(ok) {
     unlock();
-    if (ok) { tone(784, 0, .18, .16); tone(1175, .13, .28, .14); say('تمت المزايدة'); }
-    else    { tone(320, 0, .2, .16);  tone(200, .16, .32, .15);  say('لم تتم المزايدة'); }
+    if (ok) { successSound(); say('تمت المزايدة بنجاح'); }
+    else    { rejectSound();  say('لم تتم المزايدة'); }
   }
   window.__bidFeedback = feedback;
   window.__unlockAudio = unlock;
@@ -1178,12 +1217,26 @@ function layout_end(): void { ?>
   // Full-screen image viewer. Tap a lot photo to open it whole, tap again to
   // magnify and pan, tap the backdrop or Escape to close.
   var lb = document.getElementById('lightbox');
-  if (lb) {
+  var lbShots = Array.prototype.slice.call(document.querySelectorAll('.gal-track img'));
+  if (lb && lbShots.length) {
     var lbImg = document.getElementById('lb-img'),
-        lbStage = document.getElementById('lb-stage');
-    function openLb(src, alt) {
-      lbImg.src = src; lbImg.alt = alt || '';
-      lbStage.classList.remove('zoomed');
+        lbStage = document.getElementById('lb-stage'),
+        lbCount = document.getElementById('lb-count'),
+        lbPrev = document.getElementById('lb-prev'),
+        lbNext = document.getElementById('lb-next'),
+        lbIdx = 0;
+
+    function show(i) {
+      lbIdx = (i + lbShots.length) % lbShots.length;      // wraps around
+      lbImg.src = lbShots[lbIdx].src;
+      lbImg.alt = lbShots[lbIdx].alt || '';
+      lbStage.classList.remove('zoomed');                  // always open a new photo fitted
+      lbStage.scrollTop = 0; lbStage.scrollLeft = 0;
+      lbCount.textContent = lbShots.length > 1 ? (lbIdx + 1) + ' / ' + lbShots.length : '';
+      lbPrev.hidden = lbNext.hidden = lbShots.length < 2;
+    }
+    function openLb(i) {
+      show(i);
       lb.hidden = false;
       document.body.style.overflow = 'hidden';
     }
@@ -1191,18 +1244,33 @@ function layout_end(): void { ?>
       lb.hidden = true; lbImg.src = '';
       document.body.style.overflow = '';
     }
-    document.querySelectorAll('.gal-track img').forEach(function (img) {
-      img.addEventListener('click', function () { openLb(img.src, img.alt); });
+    lbShots.forEach(function (img, i) {
+      img.addEventListener('click', function () { openLb(i); });
     });
     lbImg.addEventListener('click', function (e) {
       e.stopPropagation();
       lbStage.classList.toggle('zoomed');
     });
-    lbStage.addEventListener('click', closeLb);          // tapping the backdrop closes
+    lbStage.addEventListener('click', closeLb);            // backdrop closes
     document.getElementById('lb-close').addEventListener('click', closeLb);
+    lbPrev.addEventListener('click', function (e) { e.stopPropagation(); show(lbIdx - 1); });
+    lbNext.addEventListener('click', function (e) { e.stopPropagation(); show(lbIdx + 1); });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !lb.hidden) closeLb();
+      if (lb.hidden) return;
+      if (e.key === 'Escape') closeLb();
+      if (e.key === 'ArrowRight') show(lbIdx - 1);         // RTL: right goes back
+      if (e.key === 'ArrowLeft') show(lbIdx + 1);
     });
+    // Swipe between photos, but only when not magnified (then dragging pans).
+    var sx = 0, sy = 0;
+    lbStage.addEventListener('touchstart', function (e) {
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    }, { passive: true });
+    lbStage.addEventListener('touchend', function (e) {
+      if (lbStage.classList.contains('zoomed') || lbShots.length < 2) return;
+      var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) show(lbIdx + (dx > 0 ? -1 : 1));
+    }, { passive: true });
   }
 
   // Image gallery: tap a thumbnail to jump, swipe to browse. The active slide is
@@ -1243,20 +1311,48 @@ function layout_end(): void { ?>
   // can play while the tap is still "live" (iOS blocks audio otherwise).
   var form = document.getElementById('bid-form');
   if (form && window.fetch) {
+    function banner(msg) {
+      var main = document.querySelector('main'), el = document.getElementById('js-banner');
+      if (!msg) { if (el) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'js-banner'; el.className = 'error';
+        main.insertBefore(el, main.firstChild);
+      }
+      el.textContent = msg;
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
     form.addEventListener('submit', function (e) {
-      if (e.defaultPrevented) return;      // the confirm() dialog was cancelled
       e.preventDefault();
-      unlock();
-      window.__bidding = true;             // pause polling until we navigate
-      var btn = form.querySelector('button[type=submit]');
+      unlock();                            // inside the tap, so the sound is allowed
+      var amountEl = form.querySelector('input[name=amount]'),
+          btn = form.querySelector('button[type=submit]');
+      if (btn && btn.disabled) return;
+      var amount = amountEl ? amountEl.value : '';
+      if (!confirm('تأكيد المزايدة بمبلغ ' + amount + ' ريال على ' + (form.dataset.title || '') + '؟')) return;
+
+      window.__bidding = true;             // hold polling while this bid is in flight
       if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
       fetch('index.php', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
         .then(function (r) {
           var ok = r.url.indexOf('bid=ok') !== -1;
-          feedback(ok);
-          setTimeout(function () { location.href = r.url; }, ok ? 750 : 1000);
+          feedback(ok);                    // plays in full — the page does not navigate
+          var m = r.url.match(/[?&]error=([^&]*)/);
+          banner(m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null);
+          if (btn) btn.style.opacity = '';
+          // Refresh the panel from the server rather than reloading the document.
+          return fetch('index.php?ajax=status&id=' + form.querySelector('input[name=auction_id]').value + '&_=' + Date.now(), { cache: 'no-store' })
+            .then(function (s) { return s.json(); })
+            .then(function (data) {
+              window.__bidding = false;
+              if (data && !data.error && window.__applyStatus) window.__applyStatus(data);
+              else if (btn) btn.disabled = false;
+            });
         })
-        .catch(function () { window.__bidding = false; form.submit(); });
+        .catch(function () {               // network trouble — fall back to a normal post
+          window.__bidding = false;
+          form.submit();
+        });
     });
   }
 })();
@@ -1583,7 +1679,10 @@ switch ($page) {
               <?php if ($auction['status'] === 'LIVE'): ?>
                 <div class="eyebrow"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
                 <div class="price" id="js-price"><?= money((int)$auction['current_price']) ?></div>
-                <?php if ($isTop): ?><p class="badge live" style="margin:8px 0 0">أنت أعلى مزايد حاليًا</p><?php elseif ($hasUserBid): ?><p class="badge cancelled" style="margin:8px 0 0">تم تجاوز مزايدتك</p><?php endif; ?>
+                <p id="js-standing" style="margin:8px 0 0"><?php
+                  if ($isTop) echo '<span class="badge live">أنت أعلى مزايد حاليًا</span>';
+                  elseif ($hasUserBid) echo '<span class="badge cancelled">تم تجاوز مزايدتك</span>';
+                ?></p>
 
                 <div style="margin:22px 0;padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
                   <?= countdown_block($auction['end_at'], 'يغلق المزاد بعد', 'js-countdown') ?>
@@ -1594,7 +1693,7 @@ switch ($page) {
                     </div>
                     <div>
                       <div class="eyebrow">عدد المزايدين</div>
-                      <div style="font-weight:600"><?= bidder_count($id) ?></div>
+                      <div style="font-weight:600" id="js-bidders"><?= bidder_count($id) ?></div>
                     </div>
                     <div>
                       <div class="eyebrow">موعد الإغلاق (بتوقيت الرياض)</div>
@@ -1607,18 +1706,18 @@ switch ($page) {
                   <a class="btn bid-cta" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
                 <?php elseif (!$user['accepted_rules_at']): ?>
                   <a class="btn bid-cta" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد للمشاركة</a>
-                <?php elseif ($isTop): ?>
-                  <button disabled class="bid-cta" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
                 <?php else: ?>
-                  <form method="post" id="bid-form" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
+                  <?php // The form is always present so the page can update it in place
+                        // instead of reloading — a reload would cut the result sound short. ?>
+                  <form method="post" id="bid-form" data-title="<?= h($item['title']) ?>">
                     <input type="hidden" name="action" value="bid">
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
                     <input type="hidden" name="amount" value="<?= $minNext ?>">
                     <?= csrf_field() ?>
-                    <button type="submit" class="bid-cta" id="js-bid-btn"><?= $hasBids ? 'زايد بـ ' : 'ابدأ المزايدة بـ ' ?><?= money($minNext) ?></button>
+                    <button type="submit" class="bid-cta" id="js-bid-btn"<?= $isTop ? ' disabled' : '' ?>><?= $isTop ? 'أنت أعلى مزايد حاليًا' : (($hasBids ? 'زايد بـ ' : 'ابدأ المزايدة بـ ') . money($minNext)) ?></button>
                   </form>
                 <?php endif; ?>
-                <p class="bid-note">
+                <p class="bid-note" id="js-bid-note">
                   <?php if (!$hasBids): ?>
                     أول مزايدة تبدأ من سعر الافتتاح، ثم تزيد <?= money((int)$auction['bid_increment']) ?> في كل مزايدة.
                   <?php else: ?>
@@ -1690,7 +1789,7 @@ switch ($page) {
             <thead><tr><th>المزايد</th><th>المبلغ</th><th>الوقت</th></tr></thead>
             <tbody id="js-bids-body">
               <?php foreach ($bids as $b): ?>
-              <tr<?= (int)$b['user_id'] === $myId ? ' style="background:var(--paper)"' : '' ?>>
+              <tr<?= (int)$b['user_id'] === $myId ? ' class="mine"' : '' ?>>
                 <td><?= h($b['alias']) ?></td><td><?= money((int)$b['amount']) ?></td><td><?= date('h:i A', strtotime($b['created_at'])) ?></td>
               </tr>
               <?php endforeach; if (!$bids): ?><tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr><?php endif; ?>
@@ -1719,10 +1818,8 @@ switch ($page) {
             <a class="btn grow btn-gold" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
           <?php elseif (!$user['accepted_rules_at']): ?>
             <a class="btn grow btn-gold" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد</a>
-          <?php elseif ($isTop): ?>
-            <button class="grow" disabled>أنت أعلى مزايد حاليًا</button>
           <?php else: ?>
-            <button class="grow btn-gold" id="js-bar-bid">زايد بـ <?= money($minNext) ?></button>
+            <button class="grow btn-gold" id="js-bar-bid"<?= $isTop ? ' disabled' : '' ?>><?= $isTop ? 'أنت أعلى مزايد حاليًا' : 'زايد بـ ' . money($minNext) ?></button>
           <?php endif; ?>
         </div>
         <script>document.body.classList.add('has-bidbar');</script>
@@ -1731,29 +1828,72 @@ switch ($page) {
         (function() {
           var panel = document.getElementById('auction-panel');
           if (!panel || '<?= $auction['status'] ?>' !== 'LIVE') return;
-          // Baseline count of bids as rendered on the server. When the poll sees a
-          // different number of bids, someone has bid (or been outbid), so we reload
-          // the whole page — that way every open viewer re-renders with the correct
-          // price, button state, and "you are the top bidder" / "you were outbid" badge.
-          var lastBidCount = <?= (int)count($bids) ?>;
-          // The countdown itself is driven by the shared handler in the footer;
-          // here we only refresh its target time when a soft close extends it.
-          var clocks = document.querySelectorAll('.countdown');
+
+          // Everything below updates the page in place. Reloading would be simpler,
+          // but it cuts the result sound off mid-chime and throws away the reader's
+          // scroll position — so the page is only reloaded when the auction's status
+          // itself changes (ended, suspended, cancelled), which needs a full render.
+          var clocks   = document.querySelectorAll('.countdown'),
+              priceEl  = document.getElementById('js-price'),
+              barPrice = document.getElementById('js-bar-price'),
+              minEl    = document.getElementById('js-min-next'),
+              biddersEl= document.getElementById('js-bidders'),
+              standing = document.getElementById('js-standing'),
+              body     = document.getElementById('js-bids-body'),
+              form     = document.getElementById('bid-form'),
+              btn      = document.getElementById('js-bid-btn'),
+              barBtn   = document.getElementById('js-bar-bid'),
+              wasTop   = <?= $isTop ? 'true' : 'false' ?>,
+              seen     = <?= (int)count($bids) ?>;
+
+          function setLabels(data) {
+            var label = (data.has_bids ? 'زايد بـ ' : 'ابدأ المزايدة بـ ') + data.min_next_text;
+            if (btn) {
+              btn.disabled = !!data.is_top_bidder;
+              btn.textContent = data.is_top_bidder ? 'أنت أعلى مزايد حاليًا' : label;
+            }
+            if (barBtn) {
+              barBtn.disabled = !!data.is_top_bidder;
+              barBtn.textContent = data.is_top_bidder ? 'أنت أعلى مزايد حاليًا' : 'زايد بـ ' + data.min_next_text;
+            }
+            if (form) form.querySelector('input[name=amount]').value = data.min_next_bid;
+          }
+
+          function apply(data) {
+            if (priceEl)  priceEl.textContent  = data.price_text;
+            if (barPrice) barPrice.textContent = data.price_text;
+            if (minEl)    minEl.textContent    = data.min_next_text;
+            if (biddersEl) biddersEl.textContent = data.bidders;
+            if (data.end_ts) clocks.forEach(function (c) { c.dataset.end = data.end_ts; });
+            if (standing) {
+              standing.innerHTML = data.is_top_bidder
+                ? '<span class="badge live">أنت أعلى مزايد حاليًا</span>'
+                : (data.has_user_bid ? '<span class="badge cancelled">تم تجاوز مزايدتك</span>' : '');
+            }
+            if (body && data.bids) {
+              body.innerHTML = data.bids.length ? data.bids.map(function (b) {
+                return '<tr' + (b.is_mine ? ' class="mine"' : '') + '><td>' + b.alias +
+                       '</td><td>' + new Intl.NumberFormat().format(b.amount) + ' ريال</td><td>' + b.time + '</td></tr>';
+              }).join('') : '<tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr>';
+            }
+            setLabels(data);
+
+            // Losing the lead is worth hearing, even from another tab.
+            if (wasTop && !data.is_top_bidder) window.__bidFeedback(false);
+            wasTop = !!data.is_top_bidder;
+            seen = data.bids ? data.bids.length : seen;
+          }
+          window.__applyStatus = apply;
 
           function poll() {
-            if (window.__bidding) return;   // a bid is being submitted — don't reload under it
-            // The _ param + no-store keep Safari from serving a cached response
-            // (which would freeze the price and stop auto-refresh).
-            fetch('index.php?ajax=status&id=' + panel.dataset.id + '&_=' + Date.now(), { cache: 'no-store' }).then(function(r){return r.json();}).then(function(data) {
-              if (data.error) return;
-              // Auction ended, got suspended/cancelled, or a new bid landed → reload
-              // so the server re-renders the panel correctly for this viewer.
-              if (data.status !== 'LIVE' || (data.bids && data.bids.length !== lastBidCount)) {
-                location.reload();
-                return;
-              }
-              if (data.end_ts) clocks.forEach(function (c) { c.dataset.end = data.end_ts; });
-            }).catch(function(){});
+            if (window.__bidding) return;   // a bid of ours is in flight
+            fetch('index.php?ajax=status&id=' + panel.dataset.id + '&_=' + Date.now(), { cache: 'no-store' })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data.error) return;
+                if (data.status !== 'LIVE') { location.reload(); return; }
+                apply(data);
+              }).catch(function () {});
           }
           setInterval(poll, 4000);
         })();
