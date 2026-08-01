@@ -864,6 +864,15 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   .specs dt { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
   .specs dd { margin: 0; font-size: 15.5px; font-weight: 500; }
 
+  /* Two-column layouts. These must live in the stylesheet, not in a style
+     attribute: an inline grid-template-columns outranks any rule here, which is
+     why the wide layout never used to apply. */
+  .two-col { display: grid; grid-template-columns: 1fr; gap: 32px; align-items: start; }
+  @media (min-width: 820px) {
+    .two-col { grid-template-columns: 1.1fr 1fr; gap: 48px; }
+    .two-col.even { grid-template-columns: 1fr 1fr; }
+  }
+
   /* Sticky bid bar — the CTA stays in reach on a phone */
   .bidbar {
     position: fixed; inset-inline: 0; bottom: 0; z-index: 60;
@@ -1376,7 +1385,7 @@ switch ($page) {
         layout_start($item['title'], $user);
         ?>
         <a href="index.php" class="muted">← عودة إلى المقتنيات</a>
-        <div style="display:grid;grid-template-columns:1fr;gap:32px;margin-top:18px;align-items:start" id="grid-cols">
+        <div class="two-col" style="margin-top:18px">
           <div>
             <?php if ($images): ?>
               <div class="gallery" data-count="<?= count($images) ?>">
@@ -1545,7 +1554,6 @@ switch ($page) {
         </div>
         <script>document.body.classList.add('has-bidbar');</script>
         <?php endif; ?>
-        <style>@media(min-width:820px){#grid-cols{grid-template-columns:1.15fr 1fr;gap:44px}}</style>
         <script>
         (function() {
           var panel = document.getElementById('auction-panel');
@@ -1725,7 +1733,7 @@ switch ($page) {
           <h1><?= $editing ? 'تعديل: ' . h($it['title']) : 'إضافة قطعة جديدة' ?></h1>
           <?php if ($editing): ?><a class="btn secondary" href="index.php?page=admin_auction_new&item_id=<?= $it['id'] ?>">+ إنشاء مزاد لهذه القطعة</a><?php endif; ?>
         </div>
-        <div style="display:grid;grid-template-columns:1fr;gap:20px" id="grid-cols">
+        <div class="two-col even">
           <div>
             <?php if ($editing): ?>
             <h3>الصور الحالية</h3>
@@ -1769,7 +1777,6 @@ switch ($page) {
             </form>
           </div>
         </div>
-        <style>@media(min-width:800px){#grid-cols{grid-template-columns:1fr 1fr}}</style>
         <?php
         layout_end();
         break;
@@ -1850,7 +1857,7 @@ switch ($page) {
         ?>
         <h1>إدارة مزاد: <?= h($item['title']) ?></h1>
         <span class="badge <?= status_class($auction['status']) ?>"><?= status_label($auction['status']) ?></span>
-        <div style="display:grid;grid-template-columns:1fr;gap:20px;margin-top:12px" id="grid-cols">
+        <div class="two-col even" style="margin-top:12px">
           <div>
             <?php if ($auction['status'] === 'DRAFT'): ?>
               <form method="post" class="card"><input type="hidden" name="action" value="admin_auction_publish"><input type="hidden" name="id" value="<?= $id ?>"><?= csrf_field() ?><button type="submit" style="width:100%;background:#047857">نشر المزاد</button></form>
@@ -1920,7 +1927,6 @@ switch ($page) {
             </table>
           </div>
         </div>
-        <style>@media(min-width:800px){#grid-cols{grid-template-columns:1fr 1fr}}</style>
         <?php
         layout_end();
         break;
