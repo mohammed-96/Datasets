@@ -1,4 +1,4 @@
-# المزاد العائلي — single-file PHP edition
+# مزاد الذكريات — single-file PHP edition
 
 Everything — routing, database, and HTML — lives in **`index.php`**. No build step,
 no Node.js, no Composer. Just upload the file (plus the empty `uploads/` folder) to
@@ -37,8 +37,13 @@ add every real bidder yourself from the admin panel.
 ## What's included
 
 - Phone + PIN login (bcrypt via PHP's `password_hash`), PHP native sessions
-- **Public browsing** — anyone can view the catalogue, item pages and live prices
-  without an account. Bidding, "مزايداتي" and the admin area still require a login.
+- **Public browsing** — anyone can view the catalogue, item pages, the story page
+  and live prices without an account. Bidding, "مزايداتي" and the admin area still
+  require a login.
+- **Swipeable image gallery** — items with several photos can be browsed by swiping
+  or by tapping a thumbnail, with dots showing the position.
+- **Typography** — Amiri for headings and IBM Plex Sans Arabic for the interface,
+  loaded without blocking the first paint, falling back to iOS's SF Arabic.
 - **Audible bid feedback** — an approved bid plays a rising chime and says
   "تمت المزايدة"; a rejected one plays a low tone and says "لم تتم المزايدة".
   Generated in the browser, so there are no audio files to upload.

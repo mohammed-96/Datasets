@@ -633,7 +633,20 @@ function layout_start(string $title, ?array $user): void {
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f5f7">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title><?= h($title) ?> — المزاد العائلي</title>
+<meta name="apple-mobile-web-app-title" content="مزاد الذكريات">
+<meta name="description" content="مزاد الذكريات — كل قطعةٍ تروي قصة، وكل قصةٍ تحفظ أثرًا.">
+<title><?= h($title) ?> — مزاد الذكريات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<?php
+// Loaded without blocking the first paint: the page renders immediately in the
+// system Arabic face (SF Arabic on iPhone, which is already handsome) and swaps
+// to Amiri / IBM Plex once they arrive. On a weak connection the site still shows
+// instantly instead of waiting on a font server.
+$fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap';
+?>
+<link rel="stylesheet" href="<?= h($fontsHref) ?>" media="print" onload="this.media='all';this.onload=null">
+<noscript><link rel="stylesheet" href="<?= h($fontsHref) ?>"></noscript>
 <style>
   :root {
     --ink: #1d1d1f;          /* primary text */
@@ -645,18 +658,23 @@ function layout_start(string $title, ?array $user): void {
     --gold-dark: #866832;
     --radius: 20px;
     --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+    /* Amiri (classical Naskh) carries the name and headings the way an auction
+       house wordmark would; IBM Plex Sans Arabic keeps the interface crisp on
+       small screens. Both fall back to iOS's own SF Arabic if they don't load. */
+    --font-display: 'Amiri', 'SF Arabic', Georgia, serif;
+    --font-ui: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Segoe UI', Tahoma, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { -webkit-text-size-adjust: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+    font-family: var(--font-ui);
     margin: 0; background: var(--bg); color: var(--ink);
-    -webkit-font-smoothing: antialiased; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; line-height: 1.6;
   }
   a { color: inherit; text-decoration: none; }
-  h1 { font-size: 28px; font-weight: 700; letter-spacing: -.022em; margin: 0 0 4px; }
-  h2 { font-size: 21px; font-weight: 650; letter-spacing: -.018em; margin: 28px 0 12px; }
-  h3 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  h1 { font-family: var(--font-display); font-size: 32px; font-weight: 700; margin: 0 0 4px; line-height: 1.35; }
+  h2 { font-family: var(--font-display); font-size: 25px; font-weight: 700; margin: 30px 0 12px; line-height: 1.4; }
+  h3 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
 
   /* Frosted, sticky header — the Apple signature */
   header {
@@ -668,7 +686,7 @@ function layout_start(string $title, ?array $user): void {
     padding: 11px 20px; display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 10px;
   }
-  header .brand { font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+  header .brand { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: .01em; }
   .header-actions { display: flex; align-items: center; gap: 14px; }
   .hlink { font-size: 14px; color: var(--muted); transition: color .2s; }
   .hlink:hover { color: var(--ink); }
@@ -760,6 +778,66 @@ function layout_start(string $title, ?array $user): void {
   .thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; box-shadow: var(--shadow); }
 
+  /* Image gallery — swiping is handled natively by CSS scroll-snap, which is
+     what feels right on iPhone; the dots and thumbnails just follow along. */
+  .gallery { position: relative; }
+  .gal-track {
+    display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+    border-radius: 16px; background: #ececee; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .gal-track::-webkit-scrollbar { display: none; }
+  .gal-track img {
+    flex: 0 0 100%; width: 100%; aspect-ratio: 1; object-fit: cover;
+    scroll-snap-align: center; display: block;
+  }
+  .gal-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
+  .gal-dots span {
+    width: 6px; height: 6px; border-radius: 50%; background: rgba(0,0,0,.16);
+    transition: width .25s, background .25s;
+  }
+  .gal-dots span.on { background: var(--gold); width: 20px; border-radius: 3px; }
+  .thumbs img { cursor: pointer; opacity: .55; transition: opacity .2s, box-shadow .2s; }
+  .thumbs img.on { opacity: 1; box-shadow: 0 0 0 2px var(--gold); }
+
+  /* Hero — the story-first opening an auction house leads with */
+  .hero { text-align: center; padding: 40px 4px 8px; }
+  .hero .kicker {
+    font-size: 10.5px; letter-spacing: .34em; color: var(--gold-dark);
+    font-weight: 600; margin-bottom: 14px;
+  }
+  .hero h1 { font-size: 46px; line-height: 1.25; margin-bottom: 10px; }
+  .hero .tagline {
+    font-family: var(--font-display); font-size: 20px; color: var(--gold-dark);
+    line-height: 1.75; margin: 0 auto; max-width: 460px;
+  }
+  .hero .lede {
+    max-width: 580px; margin: 18px auto 0; color: var(--muted);
+    font-size: 15px; line-height: 2;
+  }
+  .rule {
+    width: 54px; height: 1px; background: var(--gold); opacity: .5;
+    margin: 22px auto; border: 0;
+  }
+  .chip {
+    display: inline-block; padding: 9px 18px; border-radius: 980px;
+    background: rgba(156,124,60,.11); color: var(--gold-dark);
+    font-size: 13.5px; font-weight: 500; line-height: 1.5;
+  }
+  .hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+
+  /* Section heading with a quiet subtitle beside it */
+  .section-head { margin: 38px 0 14px; }
+  .section-head h2 { margin: 0; }
+  .section-head .sub { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+
+  .story p { font-size: 15.5px; line-height: 2.1; color: #3a3a3d; margin: 0 0 16px; }
+  .story ul { padding-inline-start: 20px; margin: 0 0 16px; color: #3a3a3d; line-height: 2.1; font-size: 15.5px; }
+  .story .pull {
+    font-family: var(--font-display); font-size: 21px; line-height: 1.85;
+    color: var(--gold-dark); text-align: center; margin: 26px 0; padding: 0 10px;
+  }
+
   /* Guest banner — invites sign-in without nagging */
   .guest-note {
     background: var(--surface); border-radius: 16px; padding: 14px 18px; margin-bottom: 18px;
@@ -768,19 +846,32 @@ function layout_start(string $title, ?array $user): void {
   }
 
   footer {
-    max-width: 1040px; margin: 0 auto; padding: 32px 20px 40px;
+    max-width: 1040px; margin: 0 auto; padding: 38px 20px 34px;
     text-align: center; border-top: 1px solid var(--line);
   }
-  footer .by { font-size: 13px; color: var(--muted); }
-  footer .co { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; margin-top: 2px; }
-  footer .en { font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
+  footer .fbrand { font-family: var(--font-display); font-size: 19px; font-weight: 700; }
+  footer .fline { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  footer .flinks { margin-top: 14px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+  footer .flinks a { font-size: 13.5px; color: var(--muted); }
+  footer .flinks a:hover { color: var(--ink); }
+  footer .sig { margin-top: 20px; font-size: 10.5px; color: #a1a1a6; letter-spacing: .04em; }
 
+  /* Phones first — this is where nearly all the bidding happens */
   @media (max-width: 500px) {
-    h1 { font-size: 24px; }
+    h1 { font-size: 27px; }
+    h2 { font-size: 22px; }
     main { padding: 18px 16px 32px; }
     .card { padding: 20px; border-radius: 18px; }
     .price { font-size: 38px; }
     .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 13px; }
+    .hero { padding: 26px 2px 4px; }
+    .hero h1 { font-size: 36px; }
+    .hero .tagline { font-size: 17.5px; }
+    .hero .lede { font-size: 14.5px; line-height: 1.95; }
+    .story p, .story ul { font-size: 15px; line-height: 2; }
+    .story .pull { font-size: 18.5px; }
+    header { padding: 10px 16px; }
+    header .brand { font-size: 19px; }
   }
 </style>
 </head>
@@ -795,7 +886,7 @@ function layout_start(string $title, ?array $user): void {
 ?>
 <?php if (!$onLoginPage): ?>
 <header>
-  <a class="brand" href="index.php">المزاد العائلي</a>
+  <a class="brand" href="index.php">مزاد الذكريات</a>
   <div class="header-actions">
     <?php if ($user): ?>
       <?php if ($user['role'] === 'admin'): ?><a class="hlink" href="index.php?page=admin">لوحة الإدارة</a><?php endif; ?>
@@ -803,6 +894,7 @@ function layout_start(string $title, ?array $user): void {
       <span class="user-pill"><?= h($user['alias']) ?></span>
       <form method="post" style="margin:0"><input type="hidden" name="action" value="logout"><button class="btn secondary btn-sm" type="submit">خروج</button></form>
     <?php else: ?>
+      <a class="hlink" href="index.php?page=about">قصة المزاد</a>
       <a class="btn btn-sm" href="<?= h($loginHref) ?>">تسجيل الدخول</a>
     <?php endif; ?>
   </div>
@@ -826,9 +918,14 @@ function layout_start(string $title, ?array $user): void {
 function layout_end(): void { ?>
 </main>
 <footer>
-  <div class="by">تشغيل وتطوير</div>
-  <div class="co">شركة مدار البيان</div>
-  <div class="en">Powered by Madar Albayan</div>
+  <div class="fbrand">مزاد الذكريات</div>
+  <div class="fline">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا</div>
+  <div class="flinks">
+    <a href="index.php">المقتنيات</a>
+    <a href="index.php?page=about">قصة المزاد</a>
+    <a href="index.php?page=rules">قواعد المزاد</a>
+  </div>
+  <div class="sig">مدار البيان</div>
 </footer>
 <script>
 /* Audible bid feedback — a soft chime plus a spoken result, so an approved or
@@ -878,6 +975,40 @@ function layout_end(): void { ?>
       document.removeEventListener('click', once);
     });
     setTimeout(function () { feedback(ok); }, 120);
+  }
+
+  // Image gallery: tap a thumbnail to jump, swipe to browse. The active slide is
+  // found by whichever image sits closest to the track's centre, which works the
+  // same in RTL as in LTR (no scrollLeft maths, which differs across browsers).
+  var track = document.getElementById('gal-track');
+  if (track) {
+    var slides = Array.prototype.slice.call(track.querySelectorAll('img'));
+    var dots = Array.prototype.slice.call(document.querySelectorAll('#gal-dots span'));
+    var thumbs = Array.prototype.slice.call(document.querySelectorAll('#gal-thumbs img'));
+    function activeIndex() {
+      var mid = track.getBoundingClientRect().left + track.clientWidth / 2, best = 0, min = Infinity;
+      slides.forEach(function (s, i) {
+        var r = s.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid);
+        if (d < min) { min = d; best = i; }
+      });
+      return best;
+    }
+    function sync() {
+      var i = activeIndex();
+      dots.forEach(function (d, n) { d.className = n === i ? 'on' : ''; });
+      thumbs.forEach(function (t, n) { t.className = n === i ? 'on' : ''; });
+    }
+    var raf;
+    track.addEventListener('scroll', function () {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(sync);
+    }, { passive: true });
+    thumbs.forEach(function (t, i) {
+      t.addEventListener('click', function () {
+        slides[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
+    });
+    sync();
   }
 
   // Bid form: keep the confirm dialog, then post in the background so the sound
@@ -938,7 +1069,7 @@ function fetch_auctions(string $whereSql, array $params = []): array {
 $user = current_user();
 // Browsing is public: anyone can see the catalogue and any item, signed in or not.
 // Bidding, "my bids" and the admin area still require an account.
-const PUBLIC_PAGES = ['login', 'home', 'item'];
+const PUBLIC_PAGES = ['login', 'home', 'item', 'about', 'rules'];
 $page = $_GET['page'] ?? 'home';
 if (!$user && !in_array($page, PUBLIC_PAGES, true)) $page = 'login';
 
@@ -948,9 +1079,12 @@ switch ($page) {
         if (!str_starts_with($next, 'index.php?')) $next = '';
         layout_start('تسجيل الدخول', null);
         ?>
-        <div style="max-width:380px;margin:48px auto 0">
-          <h1 style="text-align:center;font-size:32px">المزاد العائلي</h1>
-          <p class="muted" style="text-align:center;margin-bottom:26px">منصة خاصة لإدارة مزادات العائلة</p>
+        <div style="max-width:380px;margin:44px auto 0">
+          <div style="text-align:center;margin-bottom:26px">
+            <div class="kicker" style="font-size:10.5px;letter-spacing:.34em;color:var(--gold-dark);font-weight:600;margin-bottom:12px">مبادرة عائلية</div>
+            <h1 style="font-size:40px">مزاد الذكريات</h1>
+            <p class="tagline" style="font-family:var(--font-display);font-size:17px;color:var(--gold-dark);margin:6px 0 0">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
+          </div>
           <div class="card">
             <form method="post">
               <input type="hidden" name="action" value="login">
@@ -972,13 +1106,13 @@ switch ($page) {
         break;
 
     case 'rules':
-        require_login();
         $next = $_GET['next'] ?? 'index.php';
         layout_start('قواعد المزاد', $user);
         ?>
         <h1>قواعد المزاد</h1>
+        <p class="muted" style="margin-bottom:18px">قواعد واضحة تحفظ حق الجميع، وتضمن مزايدة عادلة وشفافة.</p>
         <div class="card">
-          <ol>
+          <ol style="line-height:2.1;padding-inline-start:20px;margin:0">
             <li>المزايدة نهائية بعد التأكيد ولا يمكن التراجع عنها.</li>
             <li>أعلى مزايدة صحيحة عند إغلاق المزاد هي الفائزة.</li>
             <li>الهوية الحقيقية للمزايدين مخفية، ويظهر فقط المعرف المستعار.</li>
@@ -986,12 +1120,48 @@ switch ($page) {
             <li>يتم الاحتفاظ بسجل دائم لكل مزايدة.</li>
             <li>تمديد تلقائي لمنع الفوز بمزايدة في آخر لحظة (Soft Close).</li>
           </ol>
-          <form method="post">
+          <?php if ($user): ?>
+          <form method="post" style="margin-top:20px">
             <input type="hidden" name="action" value="accept_rules">
             <input type="hidden" name="next" value="<?= h($next) ?>">
             <?= csrf_field() ?>
             <button type="submit" style="width:100%">قرأت وأوافق على قواعد المزاد</button>
           </form>
+          <?php else: ?>
+          <a class="btn" style="display:block;text-align:center;margin-top:20px" href="index.php?page=login">سجّل الدخول للمشاركة</a>
+          <?php endif; ?>
+        </div>
+        <?php
+        layout_end();
+        break;
+
+    case 'about':
+        layout_start('قصة المزاد', $user);
+        ?>
+        <div class="hero" style="padding-top:26px">
+          <div class="kicker">قصة المزاد</div>
+          <h1>مزاد الذكريات</h1>
+          <p class="tagline">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
+        </div>
+        <hr class="rule">
+        <div class="card story">
+          <p>مرحبًا بكم في <strong>مزاد الذكريات</strong>، وهي مبادرة عائلية مستوحاة من أعرق دور المزادات العالمية، أُطلقت وفاءً لذكرى والدتنا – رحمها الله – واحتفاءً بإرثها الذي ترك أثره في حياتنا جميعًا.</p>
+          <p class="pull">في هذا المزاد، لا تُعرض المقتنيات لقيمتها المادية فحسب، بل لما تحمله من حكايات وذكريات.</p>
+          <p>فلكل قطعة تاريخها، ولكل مجوهرة قصة، ولكل أثر معنى يستحق أن يُروى، ولما تمثله من محطاتٍ في حياة صاحبتها.</p>
+          <h3 style="margin:24px 0 10px">ستجدون هنا</h3>
+          <ul>
+            <li>إعلانات المزاد ومراحله.</li>
+            <li>استعراض المقتنيات وصورها.</li>
+            <li>قصص مختارة لبعض القطع وتفاصيلها.</li>
+            <li>مواعيد وآلية المشاركة في المزايدة.</li>
+            <li>جميع المستجدات المتعلقة بالمزاد.</li>
+          </ul>
+          <h3 style="margin:24px 0 10px">أثرٌ يتجاوز الذكرى</h3>
+          <p>نأمل أن يكون لهذا المزاد أثرٌ يتجاوز حفظ الذكريات، إذ سيُخصص <strong>ثلث صافي قيمة المزاد</strong> – بإذن الله – للأعمال الخيرية، سائلين الله أن يجعلها صدقةً جارية في ميزان حسنات والدتنا، وأن يبارك في أثرها.</p>
+          <p>ونرحب بكل من يود مشاركة قصة أو ذكرى أو معلومة عن إحدى المقتنيات، لتبقى جزءًا من هذا الإرث الجميل، ولتُحفظ للأجيال القادمة.</p>
+          <div style="text-align:center;margin-top:26px">
+            <a class="btn" href="index.php">تصفّح المقتنيات</a>
+          </div>
         </div>
         <?php
         layout_end();
@@ -1004,23 +1174,43 @@ switch ($page) {
         $ended = fetch_auctions("a.status = 'ENDED' ORDER BY a.end_at DESC LIMIT 30");
         ?>
         <?php if ($user): ?>
-          <h1>مرحبًا، <?= h($user['alias']) ?></h1>
+          <div style="padding:8px 0 2px">
+            <h1 style="font-size:30px">مرحبًا، <?= h($user['alias']) ?></h1>
+            <p class="muted">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
+          </div>
         <?php else: ?>
-          <h1>المزاد العائلي</h1>
-          <div class="guest-note">
-            <span>يمكنك تصفّح جميع المزادات والأسعار بحرّية. للمزايدة يلزم تسجيل الدخول.</span>
-            <a class="btn btn-sm" href="index.php?page=login">تسجيل الدخول</a>
+          <div class="hero">
+            <div class="kicker">مبادرة عائلية</div>
+            <h1>مزاد الذكريات</h1>
+            <p class="tagline">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
+            <p class="lede">مبادرة عائلية مستوحاة من أعرق دور المزادات العالمية، أُطلقت وفاءً لذكرى والدتنا – رحمها الله – واحتفاءً بإرثها. لا تُعرض المقتنيات لقيمتها المادية فحسب، بل لما تحمله من حكايات وذكريات.</p>
+            <div class="hero-actions">
+              <a class="btn" href="#المقتنيات">تصفّح المقتنيات</a>
+              <a class="btn secondary" href="index.php?page=about">قصة المزاد</a>
+            </div>
+            <hr class="rule">
+            <span class="chip">ثلثُ صافي قيمة المزاد يُخصَّص للأعمال الخيرية</span>
           </div>
         <?php endif; ?>
-        <h2>قائمة الآن (<?= count($live) ?>)</h2>
+
+        <div class="section-head" id="المقتنيات">
+          <h2>قائمة الآن<?= $live ? ' (' . count($live) . ')' : '' ?></h2>
+          <div class="sub">مقتنيات مفتوحة للمزايدة في هذه اللحظة</div>
+        </div>
         <div class="grid"><?php foreach ($live as $a) echo auction_card($a); ?></div>
-        <?php if (!$live): ?><p class="muted">لا توجد مزادات قائمة حاليًا</p><?php endif; ?>
+        <?php if (!$live): ?><p class="muted">لا توجد مزادات قائمة حاليًا — تابعونا، فالقادم يحمل حكايات.</p><?php endif; ?>
 
-        <h2 style="margin-top:24px">القادمة (<?= count($upcoming) ?>)</h2>
+        <div class="section-head">
+          <h2>القادمة<?= $upcoming ? ' (' . count($upcoming) . ')' : '' ?></h2>
+          <div class="sub">قطعٌ تستعد لتروي قصتها</div>
+        </div>
         <div class="grid"><?php foreach ($upcoming as $a) echo auction_card($a); ?></div>
-        <?php if (!$upcoming): ?><p class="muted">لا توجد مزادات قادمة</p><?php endif; ?>
+        <?php if (!$upcoming): ?><p class="muted">لا توجد مزادات قادمة حاليًا</p><?php endif; ?>
 
-        <h2 style="margin-top:24px">المنتهية (<?= count($ended) ?>)</h2>
+        <div class="section-head">
+          <h2>المنتهية<?= $ended ? ' (' . count($ended) . ')' : '' ?></h2>
+          <div class="sub">ذكرياتٌ وجدت أصحابها</div>
+        </div>
         <div class="grid"><?php foreach ($ended as $a) echo auction_card($a); ?></div>
         <?php if (!$ended): ?><p class="muted">لا توجد مزادات منتهية بعد</p><?php endif; ?>
         <?php
@@ -1076,10 +1266,25 @@ switch ($page) {
           <div>
             <h1><?= h($item['title']) ?></h1>
             <?php if ($images): ?>
-              <img src="<?= h(media_url($images[0]['url'])) ?>" style="width:100%;border-radius:12px" alt="">
-              <?php if (count($images) > 1): ?><div class="thumbs"><?php foreach ($images as $im) echo '<img src="' . h(media_url($im['url'])) . '" alt="">'; ?></div><?php endif; ?>
+              <div class="gallery" data-count="<?= count($images) ?>">
+                <div class="gal-track" id="gal-track">
+                  <?php foreach ($images as $i => $im): ?>
+                    <img src="<?= h(media_url($im['url'])) ?>" alt="<?= h($item['title']) ?> — <?= $i + 1 ?>">
+                  <?php endforeach; ?>
+                </div>
+                <?php if (count($images) > 1): ?>
+                  <div class="gal-dots" id="gal-dots">
+                    <?php foreach ($images as $i => $im): ?><span<?= $i === 0 ? ' class="on"' : '' ?>></span><?php endforeach; ?>
+                  </div>
+                  <div class="thumbs" id="gal-thumbs">
+                    <?php foreach ($images as $i => $im): ?>
+                      <img src="<?= h(media_url($im['url'])) ?>"<?= $i === 0 ? ' class="on"' : '' ?> alt="">
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
             <?php else: ?>
-              <div style="aspect-ratio:1;background:#eee;border-radius:12px"></div>
+              <div style="aspect-ratio:1;background:#ececee;border-radius:16px"></div>
             <?php endif; ?>
             <div class="card" style="margin-top:12px">
               <?php

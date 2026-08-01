@@ -10,6 +10,15 @@ function check(label, cond) {
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 
+// Keep the suite hermetic and fast: the web fonts are cosmetic and come from a
+// third-party CDN, so never let a test wait on them.
+const _newPage = browser.newPage.bind(browser);
+browser.newPage = async (...args) => {
+  const pg = await _newPage(...args);
+  await pg.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  return pg;
+};
+
 const TEST_PHONE = "0599990001";
 const TEST_PIN = "554433";
 let auctionId = null;
@@ -197,6 +206,29 @@ let auctionId = null;
   check("guest cannot reach my-bids", await page.locator('input[name=pin]').count() === 1);
 
   check("footer credits Madar Albayan", (await page.locator("footer").innerText()).includes("مدار البيان"));
+  check("site is branded مزاد الذكريات", (await page.locator("header .brand").innerText()).includes("مزاد الذكريات"));
+
+  // Story page is public and carries the initiative's copy.
+  await page.goto(`${BASE}?page=about`);
+  const about = await page.locator("body").innerText();
+  check("story page is public", about.includes("مزاد الذكريات") && about.includes("كل قطعةٍ تروي قصة"));
+  check("story page mentions the charity pledge", about.includes("ثلث صافي قيمة المزاد"));
+  await page.close();
+}
+
+// ---- Multi-image gallery ----
+{
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?page=item&id=${auctionId}`);
+  const shots = await page.locator("#gal-track img").count();
+  check("gallery renders the item's images", shots >= 1);
+  if (shots > 1) {
+    check("gallery has dots", await page.locator("#gal-dots span").count() === shots);
+    await page.locator("#gal-thumbs img").nth(1).click();
+    await page.waitForTimeout(800);
+    check("tapping a thumbnail switches the image",
+      await page.locator("#gal-thumbs img").nth(1).getAttribute("class") === "on");
+  }
   await page.close();
 }
 
