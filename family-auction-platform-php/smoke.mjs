@@ -161,9 +161,13 @@ let auctionId = null;
     await bidBtn.click();
     // The bid posts in the background and the panel updates in place — the page
     // deliberately does NOT navigate, so the result sound can play out in full.
+    // Wait for the refreshed panel, not just the optimistic button disable that
+    // happens the instant the form is submitted.
     await page.waitForFunction(
-      () => document.getElementById("js-bid-btn") && document.getElementById("js-bid-btn").disabled,
-      null, { timeout: 10000 });
+      () => {
+        const s = document.getElementById("js-standing");
+        return s && s.textContent.trim().length > 0;
+      }, null, { timeout: 10000 });
     check("bidding does not reload the page", page.url() === urlBefore);
     const priceAfter = await page.locator("#js-price").innerText();
     check("price shows the bid amount", priceAfter.includes("1,000") || priceAfter.includes("1000"));

@@ -14,6 +14,10 @@ date_default_timezone_set('Asia/Riyadh');
 
 const DB_FILE = __DIR__ . '/auction.db';
 const UPLOAD_DIR = __DIR__ . '/uploads';
+// Drop your own bid sounds in here as approved.* / rejected.* (mp3, m4a, ogg or
+// wav). If a file is missing the page falls back to a sound it generates itself,
+// so bidding always gives an audible result.
+const SOUND_DIR = __DIR__ . '/sounds';
 const ADMIN_PHONE = '0500000000';
 const ADMIN_PIN = '998877';
 // After a bid is accepted, the auction is locked for this many seconds: only the
@@ -37,6 +41,33 @@ if (isset($_GET['media'])) {
         header('Content-Type: ' . $types[$ext]);
         header('Cache-Control: public, max-age=86400');
         header('Content-Length: ' . filesize($path));
+        readfile($path);
+    } else {
+        http_response_code(404);
+    }
+    exit;
+}
+
+/** The bid sound for a result, or null when no file has been supplied. */
+function sound_file(string $which): ?string {
+    foreach (['mp3', 'm4a', 'ogg', 'wav'] as $ext) {
+        $p = SOUND_DIR . '/' . $which . '.' . $ext;
+        if (is_file($p)) return $p;
+    }
+    return null;
+}
+
+// Served through PHP for the same reason images are: it works on every host.
+if (isset($_GET['sound'])) {
+    session_write_close();
+    $which = $_GET['sound'] === 'rejected' ? 'rejected' : 'approved';
+    $path = sound_file($which);
+    if ($path) {
+        $types = ['mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'ogg' => 'audio/ogg', 'wav' => 'audio/wav'];
+        header('Content-Type: ' . $types[strtolower(pathinfo($path, PATHINFO_EXTENSION))]);
+        header('Cache-Control: public, max-age=604800');
+        header('Content-Length: ' . filesize($path));
+        header('Accept-Ranges: none');
         readfile($path);
     } else {
         http_response_code(404);
@@ -1104,6 +1135,81 @@ function layout_end(): void { ?>
   <div class="lb-tip" id="lb-tip">اسحب للتنقّل — اضغط على الصورة للتكبير</div>
 </div>
 <script>
+/* Bid result sounds. Your own files (sounds/approved.* and sounds/rejected.*)
+   are used when present; otherwise the page generates a sound so the result is
+   always audible. iOS only allows audio that follows a real tap, so both paths
+   are primed on the first touch anywhere on the page. */
+(function () {
+  var hasFile = { approved: <?= sound_file('approved') ? 'true' : 'false' ?>,
+                  rejected: <?= sound_file('rejected') ? 'true' : 'false' ?> };
+  var clips = {}, ctx = null, primed = false;
+
+  ['approved', 'rejected'].forEach(function (k) {
+    if (!hasFile[k]) return;
+    var a = new Audio('index.php?sound=' + k);
+    a.preload = 'auto';
+    a.addEventListener('error', function () { hasFile[k] = false; });   // fall back
+    clips[k] = a;
+  });
+
+  function prime() {
+    if (primed) return;
+    primed = true;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      var b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
+      s.buffer = b; s.connect(ctx.destination); s.start(0);
+    } catch (e) { ctx = null; }
+    // Same rule for <audio>: play it once, silently, while the tap is still live.
+    Object.keys(clips).forEach(function (k) {
+      var a = clips[k];
+      a.muted = true;
+      var p = a.play();
+      if (p && p.then) p.then(function () { a.pause(); a.currentTime = 0; a.muted = false; })
+                        .catch(function () { a.muted = false; });
+      else { a.pause(); a.currentTime = 0; a.muted = false; }
+    });
+  }
+  ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, prime, { capture: true, passive: true });
+  });
+
+  function tone(freq, at, dur, peak, type, endFreq) {
+    if (!ctx) return;
+    var osc = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + at;
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  // Bright, purchase-confirmed sparkle.
+  function synthApproved() {
+    tone(880, 0, .13, .16);  tone(1318.5, .07, .13, .16);
+    tone(1760, .14, .16, .18); tone(2637, .22, .38, .13);
+  }
+  // A blunt, unmistakable buzzer: low sawtooth sliding down, twice.
+  function synthRejected() {
+    tone(240, 0, .26, .22, 'sawtooth', 110);
+    tone(200, .3, .34, .22, 'sawtooth', 90);
+  }
+
+  function play(which) {
+    prime();
+    var a = clips[which];
+    if (hasFile[which] && a) {
+      try { a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function () {}); return; }
+      catch (e) { /* fall through to the generated sound */ }
+    }
+    if (which === 'approved') synthApproved(); else synthRejected();
+  }
+  window.__bidSound = play;
+})();
+
 (function () {
   // Every countdown on the page, wherever it appears. Reads data-end each tick
   // so a soft-close extension picked up by polling is reflected immediately.
@@ -1256,8 +1362,10 @@ function layout_end(): void { ?>
       if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
       fetch('index.php', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
         .then(function (r) {
-          // A rejected bid explains itself in a banner; an accepted one shows up
-          // in the panel below, which refreshes a moment later.
+          var ok = r.url.indexOf('bid=ok') !== -1;
+          if (window.__bidSound) window.__bidSound(ok ? 'approved' : 'rejected');
+          // A rejected bid also explains itself in a banner; an accepted one shows
+          // up in the panel below, which refreshes a moment later.
           var m = r.url.match(/[?&]error=([^&]*)/);
           banner(m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null);
           if (btn) btn.style.opacity = '';

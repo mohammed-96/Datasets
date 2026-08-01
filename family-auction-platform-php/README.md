@@ -16,10 +16,13 @@ any PHP host and it works.
 2. Create an empty **`uploads`** folder next to it (File Manager → "+ Folder"), and
    make sure it's writable (right-click → Permissions → `755`, or `775` if uploads
    fail).
-3. Visit the site. The very first request auto-creates `auction.db` (SQLite) next
+3. *(Optional)* Create a **`sounds`** folder next to `index.php` and upload
+   `approved.mp3` and `rejected.mp3` — the sounds played when a bid is accepted
+   or refused. Skip this and the site generates its own sounds instead.
+4. Visit the site. The very first request auto-creates `auction.db` (SQLite) next
    to `index.php` and seeds a single admin account — no demo bidders, items, or
    auctions.
-4. Log in with the admin account below, then add real bidders from
+5. Log in with the admin account below, then add real bidders from
    **admin → المستخدمون** and real items/auctions from **admin → القطع / المزادات**.
 
 That's it — no database to create in phpMyAdmin, no environment variables, no
@@ -42,6 +45,9 @@ add every real bidder yourself from the admin panel.
   require a login.
 - **Image gallery** — swipe or tap a thumbnail to browse a lot's photos, and tap
   any photo to open it full screen, where it can be magnified and paged through.
+- **Bid sounds** — put your own `approved.mp3` and `rejected.mp3` in `sounds/`
+  (`.m4a`, `.ogg` and `.wav` also work). Whatever is missing is replaced by a
+  sound the page generates, so a bid always gives an audible result.
 - **Typography** — Amiri for headings and El Messiri for the interface, loaded
   without blocking the first paint, falling back to iOS's SF Arabic.
 - Alias-only bidder identity — real names/phones are only ever shown to the admin
