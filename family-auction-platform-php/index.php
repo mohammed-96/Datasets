@@ -649,17 +649,19 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
 <noscript><link rel="stylesheet" href="<?= h($fontsHref) ?>"></noscript>
 <style>
   :root {
-    --ink: #1d1d1f;          /* primary text */
-    --muted: #6e6e73;        /* secondary text */
-    --bg: #f5f5f7;           /* page background */
-    --surface: #ffffff;      /* cards */
-    --line: rgba(0,0,0,.09); /* hairlines */
-    --gold: #9c7c3c;         /* accent — the one colour that carries the brand */
-    --gold-dark: #866832;
-    --radius: 20px;
-    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
-    /* Amiri (classical Naskh) carries the name and headings the way an auction
-       house wordmark would; IBM Plex Sans Arabic keeps the interface crisp on
+    /* A catalogue palette: warm paper white, near-black ink, hairline rules and
+       a single restrained gold. Luxury here comes from restraint, not colour. */
+    --ink: #16130f;
+    --muted: #77716a;
+    --bg: #ffffff;
+    --paper: #faf8f5;        /* the quiet band that separates sections */
+    --surface: #ffffff;
+    --line: #e6e1d9;         /* hairline — used instead of shadows */
+    --gold: #8a6a35;
+    --gold-dark: #6f5429;
+    --radius: 4px;           /* barely rounded; the page reads as print, not app */
+    /* Amiri (classical Naskh) sets the name and headings the way an auction
+       house sets its wordmark; IBM Plex Sans Arabic keeps the interface crisp on
        small screens. Both fall back to iOS's own SF Arabic if they don't load. */
     --font-display: 'Amiri', 'SF Arabic', Georgia, serif;
     --font-ui: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Segoe UI', Tahoma, sans-serif;
@@ -669,209 +671,256 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   body {
     font-family: var(--font-ui);
     margin: 0; background: var(--bg); color: var(--ink);
-    -webkit-font-smoothing: antialiased; line-height: 1.6;
+    -webkit-font-smoothing: antialiased; line-height: 1.7;
   }
   a { color: inherit; text-decoration: none; }
-  h1 { font-family: var(--font-display); font-size: 32px; font-weight: 700; margin: 0 0 4px; line-height: 1.35; }
-  h2 { font-family: var(--font-display); font-size: 25px; font-weight: 700; margin: 30px 0 12px; line-height: 1.4; }
-  h3 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+  /* No letter-spacing on Arabic anywhere: it pulls joined letterforms apart. */
+  h1 { font-family: var(--font-display); font-size: 38px; font-weight: 700; margin: 0 0 6px; line-height: 1.3; }
+  h2 { font-family: var(--font-display); font-size: 28px; font-weight: 700; margin: 0 0 6px; line-height: 1.35; }
+  h3 { font-size: 16px; font-weight: 600; margin: 0; }
 
-  /* Frosted, sticky header — the Apple signature */
   header {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(250,250,252,.82);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    backdrop-filter: saturate(180%) blur(20px);
+    background: rgba(255,255,255,.88);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
     border-bottom: 1px solid var(--line);
-    padding: 11px 20px; display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 10px;
   }
-  header .brand { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: .01em; }
-  .header-actions { display: flex; align-items: center; gap: 14px; }
+  header .brand { font-family: var(--font-display); font-weight: 700; font-size: 23px; }
+  .header-actions { display: flex; align-items: center; gap: 16px; }
   .hlink { font-size: 14px; color: var(--muted); transition: color .2s; }
   .hlink:hover { color: var(--ink); }
 
-  nav { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0; max-width: 1040px; margin: 0 auto; }
+  nav {
+    display: flex; gap: 22px; flex-wrap: wrap; padding: 14px 22px;
+    max-width: 1120px; margin: 0 auto; border-bottom: 1px solid var(--line);
+  }
   nav a, nav button {
-    background: rgba(0,0,0,.04); border: none; border-radius: 980px; padding: 7px 15px;
-    font-size: 13.5px; font-weight: 500; color: var(--ink); cursor: pointer; transition: background .2s;
+    background: none; border: none; padding: 0; font-size: 14px; font-weight: 400;
+    color: var(--muted); cursor: pointer; font-family: inherit; transition: color .2s;
   }
-  nav a:hover { background: rgba(0,0,0,.08); }
-  nav a.active { background: var(--gold); color: #fff; }
+  nav a:hover { color: var(--ink); }
+  nav a.active { color: var(--gold); }
 
-  main { max-width: 1040px; margin: 0 auto; padding: 24px 20px 40px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 40px 22px 64px; }
 
+  /* Flat, hairline-bounded surfaces — no drop shadows anywhere. */
   .card {
-    background: var(--surface); border-radius: var(--radius); padding: 24px;
-    margin-bottom: 18px; box-shadow: var(--shadow);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; margin-bottom: 22px;
   }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 34px 24px; }
 
-  .item-card {
-    display: block; background: var(--surface); border-radius: 18px; overflow: hidden;
-    box-shadow: var(--shadow); transition: transform .25s cubic-bezier(.2,.8,.3,1), box-shadow .25s;
+  .item-card { display: block; background: none; }
+  .item-card .shot { overflow: hidden; background: var(--paper); border-radius: var(--radius); }
+  .item-card img {
+    width: 100%; aspect-ratio: 4/5; object-fit: cover; display: block;
+    transition: transform .7s cubic-bezier(.2,.7,.3,1);
   }
-  .item-card:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(0,0,0,.05), 0 16px 36px rgba(0,0,0,.09); }
-  .item-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #ececee; }
-  .item-card .body { padding: 14px 15px 16px; }
-  .item-card h3 { margin: 7px 0 3px; font-size: 15px; font-weight: 600; }
+  .item-card:hover img { transform: scale(1.035); }
+  .item-card .body { padding: 14px 2px 0; }
+  .item-card h3 { margin: 8px 0 5px; font-family: var(--font-display); font-size: 19px; font-weight: 700; }
+  .item-card .lot { font-size: 11px; color: var(--muted); }
 
   .badge {
-    display: inline-block; padding: 3px 10px; border-radius: 980px;
-    font-size: 11px; font-weight: 600; letter-spacing: .01em;
+    display: inline-block; font-size: 11px; font-weight: 500; color: var(--muted);
+    padding: 0; background: none;
   }
-  .badge.live { background: rgba(48,209,88,.14); color: #1a7f37; }
-  .badge.upcoming { background: rgba(0,113,227,.12); color: #0058b0; }
-  .badge.ended { background: rgba(0,0,0,.06); color: var(--muted); }
-  .badge.cancelled, .badge.suspended { background: rgba(255,59,48,.12); color: #c0271d; }
-  .user-pill {
-    display: inline-block; padding: 4px 12px; border-radius: 980px; font-size: 13px;
-    font-weight: 550; background: rgba(156,124,60,.13); color: var(--gold-dark);
-  }
+  .badge::before { content: '— '; }
+  .badge.live { color: var(--gold); }
+  .badge.upcoming { color: var(--muted); }
+  .badge.ended { color: var(--muted); }
+  .badge.cancelled, .badge.suspended { color: #a3341f; }
+  .user-pill { font-size: 13px; color: var(--gold-dark); }
 
-  label { display: block; font-weight: 550; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  label { display: block; font-weight: 500; font-size: 12.5px; color: var(--muted); margin-bottom: 7px; }
   input[type=text], input[type=tel], input[type=password], input[type=number], input[type=datetime-local], textarea, select {
-    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+    width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius);
     font-size: 16px; /* 16px keeps iOS from zooming on focus */
-    margin-bottom: 16px; font-family: inherit; background: #fff; color: var(--ink);
-    transition: border-color .2s, box-shadow .2s;
+    margin-bottom: 18px; font-family: inherit; background: #fff; color: var(--ink);
+    transition: border-color .2s;
   }
-  input:focus, textarea:focus, select:focus {
-    outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(156,124,60,.13);
-  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--gold); }
 
   button, .btn {
-    display: inline-block; background: var(--gold); color: #fff; border: none; border-radius: 14px;
-    padding: 13px 22px; font-size: 15.5px; font-weight: 600; font-family: inherit; cursor: pointer;
-    letter-spacing: -.01em; transition: background .2s, transform .12s, opacity .2s;
+    display: inline-block; background: var(--ink); color: #fff; border: none; border-radius: var(--radius);
+    padding: 15px 30px; font-size: 15px; font-weight: 500; font-family: inherit; cursor: pointer;
+    transition: background .25s, opacity .25s;
   }
-  button:hover, .btn:hover { background: var(--gold-dark); }
-  button:active, .btn:active { transform: scale(.975); }
-  button:disabled { background: rgba(0,0,0,.08) !important; color: var(--muted); cursor: default; transform: none; }
-  .btn.secondary { background: rgba(0,0,0,.05); color: var(--ink); }
-  .btn.secondary:hover { background: rgba(0,0,0,.09); }
-  .btn.danger { background: rgba(255,59,48,.1); color: #c0271d; }
-  .btn.danger:hover { background: rgba(255,59,48,.16); }
-  .btn-sm { padding: 8px 16px; font-size: 14px; border-radius: 980px; }
+  button:hover, .btn:hover { background: #000; }
+  button:disabled { background: #eeebe6 !important; color: var(--muted); cursor: default; }
+  .btn.secondary { background: none; color: var(--ink); border: 1px solid var(--line); }
+  .btn.secondary:hover { background: var(--paper); border-color: var(--ink); }
+  .btn.danger { background: none; color: #a3341f; border: 1px solid #e8cfc8; }
+  .btn.danger:hover { background: #fdf6f4; }
+  .btn-sm { padding: 9px 18px; font-size: 13.5px; }
+  .btn-gold { background: var(--gold); }
+  .btn-gold:hover { background: var(--gold-dark); }
 
   table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
   table th {
-    padding: 10px; text-align: right; font-weight: 550; font-size: 12.5px;
+    padding: 0 10px 10px; text-align: right; font-weight: 500; font-size: 11.5px;
     color: var(--muted); border-bottom: 1px solid var(--line);
   }
-  table td { padding: 12px 10px; text-align: right; border-top: 1px solid var(--line); }
+  table td { padding: 14px 10px; text-align: right; border-bottom: 1px solid var(--line); }
   table td:nth-child(2) { font-variant-numeric: tabular-nums; }
 
   .error {
-    background: rgba(255,59,48,.1); color: #c0271d; padding: 13px 16px;
-    border-radius: 14px; margin-bottom: 18px; font-size: 14.5px; font-weight: 500;
+    background: none; border: 1px solid #e8cfc8; color: #a3341f; padding: 14px 18px;
+    border-radius: var(--radius); margin-bottom: 22px; font-size: 14.5px;
   }
   .success-box {
-    background: rgba(48,209,88,.13); color: #1a7f37; padding: 20px;
-    border-radius: 16px; text-align: center; font-size: 16px;
+    background: var(--paper); border: 1px solid var(--line); color: var(--ink);
+    padding: 26px; border-radius: var(--radius); text-align: center; font-size: 16px;
   }
   .muted { color: var(--muted); font-size: 13.5px; }
   .price {
-    font-size: 42px; font-weight: 680; letter-spacing: -.03em;
-    font-variant-numeric: tabular-nums; line-height: 1.15;
+    font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2;
   }
-  .thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; box-shadow: var(--shadow); }
+  /* Small label above a value — the auction-catalogue caption */
+  .eyebrow { font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+  .thumbs { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .thumbs img {
+    width: 62px; height: 62px; object-fit: cover; border-radius: var(--radius);
+    cursor: pointer; opacity: .5; transition: opacity .25s, outline-color .25s;
+    outline: 1px solid transparent; outline-offset: 2px;
+  }
+  .thumbs img.on { opacity: 1; outline-color: var(--gold); }
 
   /* Image gallery — swiping is handled natively by CSS scroll-snap, which is
      what feels right on iPhone; the dots and thumbnails just follow along. */
   .gallery { position: relative; }
   .gal-track {
     display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
-    border-radius: 16px; background: #ececee; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    border-radius: var(--radius); background: var(--paper);
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
   .gal-track::-webkit-scrollbar { display: none; }
   .gal-track img {
-    flex: 0 0 100%; width: 100%; aspect-ratio: 1; object-fit: cover;
+    flex: 0 0 100%; width: 100%; aspect-ratio: 4/5; object-fit: cover;
     scroll-snap-align: center; display: block;
   }
-  .gal-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
+  .gal-dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
   .gal-dots span {
-    width: 6px; height: 6px; border-radius: 50%; background: rgba(0,0,0,.16);
-    transition: width .25s, background .25s;
+    width: 5px; height: 5px; border-radius: 50%; background: #d8d2c8;
+    transition: width .3s, background .3s;
   }
-  .gal-dots span.on { background: var(--gold); width: 20px; border-radius: 3px; }
-  .thumbs img { cursor: pointer; opacity: .55; transition: opacity .2s, box-shadow .2s; }
-  .thumbs img.on { opacity: 1; box-shadow: 0 0 0 2px var(--gold); }
+  .gal-dots span.on { background: var(--gold); width: 22px; border-radius: 3px; }
 
   /* Hero — the story-first opening an auction house leads with */
-  .hero { text-align: center; padding: 40px 4px 8px; }
-  .hero .kicker {
-    font-size: 10.5px; letter-spacing: .34em; color: var(--gold-dark);
-    font-weight: 600; margin-bottom: 14px;
-  }
-  .hero h1 { font-size: 46px; line-height: 1.25; margin-bottom: 10px; }
+  .hero { text-align: center; padding: 26px 4px 4px; }
+  .hero .kicker { font-size: 12px; color: var(--gold); margin-bottom: 16px; }
+  .hero h1 { font-size: 54px; line-height: 1.2; margin-bottom: 12px; }
   .hero .tagline {
-    font-family: var(--font-display); font-size: 20px; color: var(--gold-dark);
-    line-height: 1.75; margin: 0 auto; max-width: 460px;
+    font-family: var(--font-display); font-size: 22px; color: var(--ink);
+    line-height: 1.8; margin: 0 auto; max-width: 470px;
   }
   .hero .lede {
-    max-width: 580px; margin: 18px auto 0; color: var(--muted);
-    font-size: 15px; line-height: 2;
+    max-width: 590px; margin: 20px auto 0; color: var(--muted);
+    font-size: 15px; line-height: 2.05;
   }
-  .rule {
-    width: 54px; height: 1px; background: var(--gold); opacity: .5;
-    margin: 22px auto; border: 0;
-  }
-  .chip {
-    display: inline-block; padding: 9px 18px; border-radius: 980px;
-    background: rgba(156,124,60,.11); color: var(--gold-dark);
-    font-size: 13.5px; font-weight: 500; line-height: 1.5;
-  }
-  .hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+  .rule { width: 40px; height: 1px; background: var(--gold); margin: 28px auto; border: 0; }
+  .chip { display: inline-block; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
 
-  /* Section heading with a quiet subtitle beside it */
-  .section-head { margin: 38px 0 14px; }
+  /* Featured lot — the editorial centrepiece of the homepage */
+  .feature { margin: 8px 0 12px; }
+  .feature .shot { background: var(--paper); border-radius: var(--radius); overflow: hidden; }
+  .feature .shot img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+  .feature .meta { padding-top: 26px; text-align: center; }
+  .feature h2 { font-size: 40px; margin: 8px 0 12px; }
+  .feature .excerpt {
+    color: var(--muted); font-size: 15px; line-height: 2; max-width: 560px;
+    margin: 0 auto 22px;
+  }
+  .feature .figures {
+    display: flex; justify-content: center; gap: 44px; flex-wrap: wrap;
+    padding: 22px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .feature .figures .val { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* Section heading — a rule and a caption, catalogue style */
+  .section-head {
+    margin: 64px 0 26px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  }
   .section-head h2 { margin: 0; }
-  .section-head .sub { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+  .section-head .sub { color: var(--muted); font-size: 13px; }
 
-  .story p { font-size: 15.5px; line-height: 2.1; color: #3a3a3d; margin: 0 0 16px; }
-  .story ul { padding-inline-start: 20px; margin: 0 0 16px; color: #3a3a3d; line-height: 2.1; font-size: 15.5px; }
+  /* The family story, set before any technical detail */
+  .story p { font-size: 16.5px; line-height: 2.1; margin: 0 0 18px; }
+  .story p:last-child { margin-bottom: 0; }
   .story .pull {
-    font-family: var(--font-display); font-size: 21px; line-height: 1.85;
-    color: var(--gold-dark); text-align: center; margin: 26px 0; padding: 0 10px;
+    font-family: var(--font-display); font-size: 22px; line-height: 1.9;
+    color: var(--gold-dark); margin: 26px 0;
   }
+
+  /* Specifications as hairline-separated blocks rather than prose */
+  .specs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .specs > div { background: var(--bg); padding: 16px 18px; }
+  .specs dt { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
+  .specs dd { margin: 0; font-size: 15.5px; font-weight: 500; }
+
+  /* Sticky bid bar — the CTA stays in reach on a phone */
+  .bidbar {
+    position: fixed; inset-inline: 0; bottom: 0; z-index: 60;
+    background: rgba(255,255,255,.95);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    border-top: 1px solid var(--line);
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 16px;
+  }
+  .bidbar .val { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .bidbar .grow { flex: 1; text-align: center; }
+  body.has-bidbar { padding-bottom: 84px; }
+  @media (min-width: 820px) { .bidbar { display: none; } body.has-bidbar { padding-bottom: 0; } }
 
   /* Guest banner — invites sign-in without nagging */
   .guest-note {
-    background: var(--surface); border-radius: 16px; padding: 14px 18px; margin-bottom: 18px;
-    box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between;
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 20px; margin-bottom: 22px;
+    display: flex; align-items: center; justify-content: space-between;
     gap: 14px; flex-wrap: wrap; font-size: 14.5px;
   }
 
   footer {
-    max-width: 1040px; margin: 0 auto; padding: 38px 20px 34px;
+    max-width: 1120px; margin: 0 auto; padding: 56px 22px 44px;
     text-align: center; border-top: 1px solid var(--line);
   }
-  footer .fbrand { font-family: var(--font-display); font-size: 19px; font-weight: 700; }
-  footer .fline { font-size: 13px; color: var(--muted); margin-top: 4px; }
-  footer .flinks { margin-top: 14px; display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+  footer .fbrand { font-family: var(--font-display); font-size: 21px; font-weight: 700; }
+  footer .fline { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  footer .flinks { margin-top: 20px; display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
   footer .flinks a { font-size: 13.5px; color: var(--muted); }
   footer .flinks a:hover { color: var(--ink); }
-  footer .sig { margin-top: 20px; font-size: 10.5px; color: #a1a1a6; letter-spacing: .04em; }
+  footer .sig { margin-top: 26px; font-size: 10.5px; color: #b3aca2; }
 
   /* Phones first — this is where nearly all the bidding happens */
-  @media (max-width: 500px) {
-    h1 { font-size: 27px; }
-    h2 { font-size: 22px; }
-    main { padding: 18px 16px 32px; }
-    .card { padding: 20px; border-radius: 18px; }
-    .price { font-size: 38px; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 13px; }
-    .hero { padding: 26px 2px 4px; }
-    .hero h1 { font-size: 36px; }
-    .hero .tagline { font-size: 17.5px; }
+  @media (max-width: 700px) {
+    h1 { font-size: 30px; }
+    h2 { font-size: 24px; }
+    main { padding: 26px 18px 44px; }
+    .card { padding: 22px; }
+    .price { font-size: 36px; }
+    .grid { grid-template-columns: repeat(2, 1fr); gap: 26px 16px; }
+    .item-card h3 { font-size: 16.5px; }
+    .hero { padding: 18px 2px 2px; }
+    .hero h1 { font-size: 40px; }
+    .hero .tagline { font-size: 18.5px; }
     .hero .lede { font-size: 14.5px; line-height: 1.95; }
-    .story p, .story ul { font-size: 15px; line-height: 2; }
-    .story .pull { font-size: 18.5px; }
-    header { padding: 10px 16px; }
-    header .brand { font-size: 19px; }
+    .feature h2 { font-size: 28px; }
+    .feature .shot img { aspect-ratio: 1; }
+    .feature .figures { gap: 30px; }
+    .feature .figures .val { font-size: 22px; }
+    .story p { font-size: 15.5px; line-height: 2.05; }
+    .story .pull { font-size: 19px; }
+    .section-head { margin: 46px 0 20px; }
+    .specs { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 12px 18px; }
+    header .brand { font-size: 20px; }
+    footer { padding: 44px 18px 36px; }
   }
 </style>
 </head>
@@ -975,6 +1024,30 @@ function layout_end(): void { ?>
     setTimeout(function () { feedback(ok); }, 120);
   }
 
+  // Countdowns anywhere on the page (the homepage's featured lot uses these).
+  var counters = document.querySelectorAll('.js-count');
+  if (counters.length) {
+    (function tickAll() {
+      counters.forEach(function (el) {
+        var end = new Date(el.dataset.end.replace(' ', 'T')).getTime();
+        var diff = Math.max(0, end - Date.now());
+        var h = Math.floor(diff / 3600000), m = Math.floor(diff % 3600000 / 60000), s = Math.floor(diff % 60000 / 1000);
+        el.textContent = diff <= 0 ? 'انتهى' : [h, m, s].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+      });
+      setTimeout(tickAll, 1000);
+    })();
+  }
+
+  // The sticky bar reuses the real bid form, so it goes through exactly the same
+  // confirm dialog, validation and sound path as the button in the panel.
+  var barBid = document.getElementById('js-bar-bid');
+  if (barBid) {
+    barBid.addEventListener('click', function () {
+      var f = document.getElementById('bid-form');
+      if (f) f.requestSubmit();
+    });
+  }
+
   // Image gallery: tap a thumbnail to jump, swipe to browse. The active slide is
   // found by whichever image sits closest to the track's centre, which works the
   // same in RTL as in LTR (no scrollLeft maths, which differs across browsers).
@@ -1046,13 +1119,34 @@ function auction_card(array $a): string {
     $url = $img->fetchColumn() ?: null;
     $price = $a['status'] === 'ENDED' && $a['winning_bid'] ? (int)$a['winning_bid'] : (int)$a['current_price'];
     return '<a class="item-card" href="index.php?page=item&id=' . $a['id'] . '">'
-        . ($url ? '<img src="' . h(media_url($url)) . '" alt="">' : '<div style="aspect-ratio:1;background:#eee"></div>')
+        . '<div class="shot">'
+        . ($url ? '<img src="' . h(media_url($url)) . '" alt="">' : '<div style="aspect-ratio:4/5"></div>')
+        . '</div>'
         . '<div class="body">'
         . '<span class="badge ' . status_class($a['status']) . '">' . status_label($a['status']) . '</span>'
         . '<h3>' . h($a['title']) . '</h3>'
-        . '<div class="muted">' . ($a['status'] === 'ENDED' ? 'السعر النهائي' : 'السعر الحالي') . '</div>'
-        . '<div style="font-weight:800">' . money($price) . '</div>'
+        . '<div class="eyebrow">' . ($a['status'] === 'ENDED' ? 'السعر النهائي' : 'السعر الحالي') . '</div>'
+        . '<div style="font-weight:600;font-variant-numeric:tabular-nums">' . money($price) . '</div>'
         . '</div></a>';
+}
+
+function first_image(int $itemId): ?string {
+    $stmt = db()->prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1');
+    $stmt->execute([$itemId]);
+    return $stmt->fetchColumn() ?: null;
+}
+
+/** How many distinct people have bid — a real figure, unlike a "watchers" count. */
+function bidder_count(int $auctionId): int {
+    $stmt = db()->prepare("SELECT COUNT(DISTINCT user_id) FROM bids WHERE auction_id = ? AND status = 'active'");
+    $stmt->execute([$auctionId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function excerpt(?string $text, int $chars = 190): string {
+    $text = trim((string)$text);
+    if ($text === '') return '';
+    return mb_strlen($text) > $chars ? mb_substr($text, 0, $chars) . '…' : $text;
 }
 
 function fetch_auctions(string $whereSql, array $params = []): array {
@@ -1161,26 +1255,78 @@ switch ($page) {
           </div>
         <?php endif; ?>
 
+        <?php
+        // The lot closing soonest leads the page, presented editorially: one large
+        // photograph, its story, then the figures. The rest follow in the grid.
+        $featured = $live[0] ?? null;
+        $rest = $featured ? array_slice($live, 1) : $live;
+        if ($featured):
+          $fImg = first_image((int)$featured['item_id']);
+          $fItem = db()->query('SELECT description FROM items WHERE id = ' . (int)$featured['item_id'])->fetch(PDO::FETCH_ASSOC);
+          $fBidders = bidder_count((int)$featured['id']);
+        ?>
         <div class="section-head" id="المقتنيات">
-          <h2>قائمة الآن<?= $live ? ' (' . count($live) . ')' : '' ?></h2>
-          <div class="sub">مقتنيات مفتوحة للمزايدة في هذه اللحظة</div>
+          <h2>القطعة الرئيسية</h2>
+          <div class="sub">الأقرب إلى الإغلاق</div>
         </div>
-        <div class="grid"><?php foreach ($live as $a) echo auction_card($a); ?></div>
-        <?php if (!$live): ?><p class="muted">لا توجد مزادات قائمة حاليًا — تابعونا، فالقادم يحمل حكايات.</p><?php endif; ?>
+        <div class="feature">
+          <a class="shot" href="index.php?page=item&id=<?= $featured['id'] ?>">
+            <?php if ($fImg): ?><img src="<?= h(media_url($fImg)) ?>" alt="<?= h($featured['title']) ?>"><?php else: ?><div style="aspect-ratio:4/3"></div><?php endif; ?>
+          </a>
+          <div class="meta">
+            <span class="badge live"><?= status_label($featured['status']) ?></span>
+            <h2><?= h($featured['title']) ?></h2>
+            <?php if (!empty($fItem['description'])): ?>
+              <p class="excerpt"><?= h(excerpt($fItem['description'])) ?></p>
+            <?php endif; ?>
+            <div class="figures">
+              <div>
+                <div class="eyebrow">السعر الحالي</div>
+                <div class="val"><?= money((int)$featured['current_price']) ?></div>
+              </div>
+              <div>
+                <div class="eyebrow">يغلق بعد</div>
+                <div class="val js-count" data-end="<?= h($featured['end_at']) ?>">—</div>
+              </div>
+              <?php if ($fBidders): ?>
+              <div>
+                <div class="eyebrow">عدد المزايدين</div>
+                <div class="val"><?= $fBidders ?></div>
+              </div>
+              <?php endif; ?>
+            </div>
+            <a class="btn" href="index.php?page=item&id=<?= $featured['id'] ?>">عرض القطعة والمزايدة</a>
+          </div>
+        </div>
+        <?php endif; ?>
 
+        <div class="section-head"<?= $featured ? '' : ' id="المقتنيات"' ?>>
+          <h2>المزادات القائمة</h2>
+          <div class="sub"><?= $rest ? 'مقتنيات مفتوحة للمزايدة الآن' : 'مقتنيات مفتوحة للمزايدة في هذه اللحظة' ?></div>
+        </div>
+        <?php if ($rest): ?>
+          <div class="grid"><?php foreach ($rest as $a) echo auction_card($a); ?></div>
+        <?php elseif (!$featured): ?>
+          <p class="muted">لا توجد مزادات قائمة حاليًا — تابعونا، فالقادم يحمل حكايات.</p>
+        <?php else: ?>
+          <p class="muted">لا توجد قطع أخرى مفتوحة للمزايدة حاليًا.</p>
+        <?php endif; ?>
+
+        <?php if ($upcoming): ?>
         <div class="section-head">
-          <h2>القادمة<?= $upcoming ? ' (' . count($upcoming) . ')' : '' ?></h2>
+          <h2>القادمة</h2>
           <div class="sub">قطعٌ تستعد لتروي قصتها</div>
         </div>
         <div class="grid"><?php foreach ($upcoming as $a) echo auction_card($a); ?></div>
-        <?php if (!$upcoming): ?><p class="muted">لا توجد مزادات قادمة حاليًا</p><?php endif; ?>
+        <?php endif; ?>
 
+        <?php if ($ended): ?>
         <div class="section-head">
-          <h2>المنتهية<?= $ended ? ' (' . count($ended) . ')' : '' ?></h2>
+          <h2>المحفوظات</h2>
           <div class="sub">ذكرياتٌ وجدت أصحابها</div>
         </div>
         <div class="grid"><?php foreach ($ended as $a) echo auction_card($a); ?></div>
-        <?php if (!$ended): ?><p class="muted">لا توجد مزادات منتهية بعد</p><?php endif; ?>
+        <?php endif; ?>
         <?php
         layout_end();
         break;
@@ -1229,10 +1375,9 @@ switch ($page) {
         }
         layout_start($item['title'], $user);
         ?>
-        <a href="index.php" class="muted">← رجوع</a>
-        <div style="display:grid;grid-template-columns:1fr;gap:20px;margin-top:10px" id="grid-cols">
+        <a href="index.php" class="muted">← عودة إلى المقتنيات</a>
+        <div style="display:grid;grid-template-columns:1fr;gap:32px;margin-top:18px;align-items:start" id="grid-cols">
           <div>
-            <h1><?= h($item['title']) ?></h1>
             <?php if ($images): ?>
               <div class="gallery" data-count="<?= count($images) ?>">
                 <div class="gal-track" id="gal-track">
@@ -1252,83 +1397,155 @@ switch ($page) {
                 <?php endif; ?>
               </div>
             <?php else: ?>
-              <div style="aspect-ratio:1;background:#ececee;border-radius:16px"></div>
+              <div style="aspect-ratio:4/5;background:var(--paper);border-radius:var(--radius)"></div>
             <?php endif; ?>
-            <div class="card" style="margin-top:12px">
-              <?php
-              $fields = [
-                  'الوصف' => $item['description'], 'الوزن' => $item['weight_grams'] ? $item['weight_grams'] . ' جرام' : null,
-                  'العيار' => $item['karat'], 'الحالة' => $item['condition_text'],
-                  'التصنيف' => $item['category'] ? CATEGORIES[$item['category']] : null, 'ملاحظات' => $item['notes'],
-              ];
-              foreach ($fields as $label => $val) {
-                  if ($val) echo '<p><strong>' . h($label) . ':</strong> ' . h((string)$val) . '</p>';
-              }
-              ?>
-            </div>
           </div>
           <div>
-            <div class="card" id="auction-panel" data-id="<?= $id ?>">
+            <span class="badge <?= status_class($auction['status']) ?>"><?= status_label($auction['status']) ?></span>
+            <h1 style="margin-top:6px"><?= h($item['title']) ?></h1>
+            <div class="card" id="auction-panel" data-id="<?= $id ?>" style="margin-top:18px">
               <?php if ($auction['status'] === 'LIVE'): ?>
-                <div class="muted"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
+                <div class="eyebrow"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
                 <div class="price" id="js-price"><?= money((int)$auction['current_price']) ?></div>
-                <?php if ($isTop): ?><p class="badge live">أنت أعلى مزايد حاليًا</p><?php elseif ($hasUserBid): ?><p class="badge cancelled">تم تجاوز مزايدتك</p><?php endif; ?>
-                <p class="muted" style="margin:6px 0">
-                  <?php if (!$hasBids): ?>
-                    أول مزايدة تبدأ من سعر الافتتاح، ثم تزيد <?= money((int)$auction['bid_increment']) ?> في كل مزايدة.
-                  <?php else: ?>
-                    قيمة كل زيادة: <?= money((int)$auction['bid_increment']) ?>
-                  <?php endif; ?>
-                </p>
-                <div class="muted">ينتهي بعد <b id="js-countdown" data-end="<?= h($auction['end_at']) ?>"></b></div>
-                <p class="muted">ينتهي: <?= fmt_dt($auction['end_at']) ?></p>
+                <?php if ($isTop): ?><p class="badge live" style="margin:8px 0 0">أنت أعلى مزايد حاليًا</p><?php elseif ($hasUserBid): ?><p class="badge cancelled" style="margin:8px 0 0">تم تجاوز مزايدتك</p><?php endif; ?>
+
+                <div style="display:flex;gap:34px;flex-wrap:wrap;margin:22px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+                  <div>
+                    <div class="eyebrow">المزايدة القادمة</div>
+                    <div style="font-weight:600;font-variant-numeric:tabular-nums"><span id="js-min-next"><?= money($minNext) ?></span></div>
+                  </div>
+                  <div>
+                    <div class="eyebrow">يغلق بعد</div>
+                    <div style="font-weight:600;font-variant-numeric:tabular-nums" id="js-countdown" data-end="<?= h($auction['end_at']) ?>">—</div>
+                  </div>
+                  <div>
+                    <div class="eyebrow">عدد المزايدين</div>
+                    <div style="font-weight:600"><?= bidder_count($id) ?></div>
+                  </div>
+                </div>
+
                 <?php if (!$user): ?>
-                  <a class="btn" style="display:block;text-align:center;margin-top:10px" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
+                  <a class="btn" style="display:block;text-align:center" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
                 <?php elseif (!$user['accepted_rules_at']): ?>
-                  <a class="btn" style="display:block;text-align:center;margin-top:10px" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الرجاء الموافقة على قواعد المزاد للمشاركة</a>
+                  <a class="btn" style="display:block;text-align:center" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد للمشاركة</a>
                 <?php elseif ($isTop): ?>
-                  <button disabled style="width:100%;margin-top:10px" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
+                  <button disabled style="width:100%" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
                 <?php else: ?>
                   <form method="post" id="bid-form" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
                     <input type="hidden" name="action" value="bid">
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
                     <input type="hidden" name="amount" value="<?= $minNext ?>">
                     <?= csrf_field() ?>
-                    <button type="submit" style="width:100%;margin-top:10px" id="js-bid-btn"><?php if (!$hasBids): ?>ابدأ المزايدة بـ <?= money($minNext) ?> (سعر الافتتاح)<?php else: ?>زايد بـ <span id="js-min-next"><?= money($minNext) ?></span><?php endif; ?></button>
+                    <button type="submit" class="btn-gold" style="width:100%" id="js-bid-btn"><?php if (!$hasBids): ?>ابدأ المزايدة بـ <?= money($minNext) ?><?php else: ?>زايد بـ <?= money($minNext) ?><?php endif; ?></button>
                   </form>
                 <?php endif; ?>
+                <p class="muted" style="margin:14px 0 0">
+                  <?php if (!$hasBids): ?>
+                    أول مزايدة تبدأ من سعر الافتتاح، ثم تزيد <?= money((int)$auction['bid_increment']) ?> في كل مزايدة.
+                  <?php else: ?>
+                    قيمة كل زيادة: <?= money((int)$auction['bid_increment']) ?>
+                  <?php endif; ?>
+                </p>
               <?php elseif ($auction['status'] === 'UPCOMING'): ?>
-                <div class="muted">سعر الافتتاح</div>
+                <div class="eyebrow">سعر الافتتاح</div>
                 <div class="price"><?= money((int)$auction['opening_price']) ?></div>
-                <p class="muted">يبدأ: <?= fmt_dt($auction['start_at']) ?></p>
+                <p class="muted" style="margin-top:14px">يبدأ المزاد: <?= fmt_dt($auction['start_at']) ?></p>
               <?php elseif ($auction['status'] === 'ENDED'): ?>
                 <?php if ($winnerAlias && $isTop): ?>
-                  <div class="success-box"><strong>🎉 مبروك! رسا عليك المزاد</strong><br><?= money((int)$auction['winning_bid']) ?></div>
+                  <div class="success-box"><strong>مبروك — رسا عليك المزاد</strong><br><span style="font-size:26px;font-weight:600"><?= money((int)$auction['winning_bid']) ?></span></div>
                 <?php elseif ($winnerAlias): ?>
-                  <p>انتهى المزاد</p><div class="price"><?= money((int)$auction['winning_bid']) ?></div>
-                  <?php if ($hasUserBid): ?><p class="muted">لم ترسُ عليك هذه القطعة</p><?php endif; ?>
+                  <div class="eyebrow">السعر النهائي</div>
+                  <div class="price"><?= money((int)$auction['winning_bid']) ?></div>
+                  <?php if ($hasUserBid): ?><p class="muted" style="margin-top:12px">لم ترسُ عليك هذه القطعة</p><?php endif; ?>
                 <?php else: ?>
                   <p>انتهى المزاد بدون فائز</p>
                 <?php endif; ?>
               <?php else: ?>
                 <p><?= $auction['status'] === 'SUSPENDED' ? 'تم تعليق المزاد بواسطة مدير المزاد' : 'تم إلغاء المزاد' ?></p>
               <?php endif; ?>
-
-              <h3 style="margin-top:20px">سجل المزايدات</h3>
-              <table id="js-bids-table">
-                <thead><tr><th>المزايد</th><th>المبلغ</th><th>الوقت</th></tr></thead>
-                <tbody id="js-bids-body">
-                  <?php foreach ($bids as $b): ?>
-                  <tr<?= (int)$b['user_id'] === (int)$user['id'] ? ' style="background:#fef3c7"' : '' ?>>
-                    <td><?= h($b['alias']) ?></td><td><?= money((int)$b['amount']) ?></td><td><?= date('h:i A', strtotime($b['created_at'])) ?></td>
-                  </tr>
-                  <?php endforeach; if (!$bids): ?><tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr><?php endif; ?>
-                </tbody>
-              </table>
             </div>
           </div>
         </div>
-        <style>@media(min-width:800px){#grid-cols{grid-template-columns:1fr 1fr}}</style>
+
+        <?php
+        // Emotion first, details second: the story leads, specifications follow.
+        $story = trim((string)($item['description'] ?? ''));
+        if ($story !== ''):
+        ?>
+        <div class="section-head"><h2>حكاية القطعة</h2><div class="sub">ما تحمله من ذكرى</div></div>
+        <div class="story" style="max-width:660px"><p><?= nl2br(h($story)) ?></p></div>
+        <?php endif; ?>
+
+        <?php
+        $specs = array_filter([
+            'الوزن' => $item['weight_grams'] ? rtrim(rtrim(number_format((float)$item['weight_grams'], 2), '0'), '.') . ' جرام' : null,
+            'العيار' => $item['karat'],
+            'الحالة' => $item['condition_text'],
+            'التصنيف' => $item['category'] ? (CATEGORIES[$item['category']] ?? null) : null,
+            'ملاحظات' => $item['notes'],
+        ]);
+        if ($specs):
+        ?>
+        <div class="section-head"><h2>المواصفات</h2></div>
+        <dl class="specs" style="max-width:660px">
+          <?php foreach ($specs as $label => $val): ?>
+            <div><dt><?= h($label) ?></dt><dd><?= h((string)$val) ?></dd></div>
+          <?php endforeach; ?>
+        </dl>
+        <?php endif; ?>
+
+        <div class="section-head"><h2>معلومات المزاد</h2></div>
+        <dl class="specs" style="max-width:660px">
+          <div><dt>سعر الافتتاح</dt><dd><?= money((int)$auction['opening_price']) ?></dd></div>
+          <div><dt>قيمة الزيادة</dt><dd><?= money((int)$auction['bid_increment']) ?></dd></div>
+          <div><dt>بداية المزاد</dt><dd><?= fmt_dt($auction['start_at']) ?></dd></div>
+          <div><dt>نهاية المزاد</dt><dd><?= fmt_dt($auction['end_at']) ?></dd></div>
+          <?php if ((int)$auction['soft_close_enabled'] === 1): ?>
+            <div style="grid-column:1/-1"><dt>التمديد التلقائي</dt><dd>تُمدَّد المدة <?= (int)$auction['extension_minutes'] ?> دقائق عند ورود مزايدة قرب الإغلاق</dd></div>
+          <?php endif; ?>
+        </dl>
+
+        <div class="section-head"><h2>سجل المزايدات</h2><div class="sub">سجل دائم لكل مزايدة</div></div>
+        <div style="max-width:660px">
+          <table id="js-bids-table">
+            <thead><tr><th>المزايد</th><th>المبلغ</th><th>الوقت</th></tr></thead>
+            <tbody id="js-bids-body">
+              <?php foreach ($bids as $b): ?>
+              <tr<?= (int)$b['user_id'] === $myId ? ' style="background:var(--paper)"' : '' ?>>
+                <td><?= h($b['alias']) ?></td><td><?= money((int)$b['amount']) ?></td><td><?= date('h:i A', strtotime($b['created_at'])) ?></td>
+              </tr>
+              <?php endforeach; if (!$bids): ?><tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr><?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+
+        <?php
+        $related = fetch_auctions("a.status = 'LIVE' AND a.id != ? ORDER BY a.end_at ASC LIMIT 4", [$id]);
+        if ($related):
+        ?>
+        <div class="section-head"><h2>قطع أخرى</h2><div class="sub">مفتوحة للمزايدة الآن</div></div>
+        <div class="grid"><?php foreach ($related as $a) echo auction_card($a); ?></div>
+        <?php endif; ?>
+
+        <?php if ($auction['status'] === 'LIVE'): ?>
+        <div class="bidbar">
+          <div>
+            <div class="eyebrow"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
+            <div class="val" id="js-bar-price"><?= money((int)$auction['current_price']) ?></div>
+          </div>
+          <?php if (!$user): ?>
+            <a class="btn grow" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
+          <?php elseif (!$user['accepted_rules_at']): ?>
+            <a class="btn grow" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد</a>
+          <?php elseif ($isTop): ?>
+            <button class="grow" disabled>أنت الأعلى</button>
+          <?php else: ?>
+            <button class="grow btn-gold" id="js-bar-bid">زايد بـ <?= money($minNext) ?></button>
+          <?php endif; ?>
+        </div>
+        <script>document.body.classList.add('has-bidbar');</script>
+        <?php endif; ?>
+        <style>@media(min-width:820px){#grid-cols{grid-template-columns:1.15fr 1fr;gap:44px}}</style>
         <script>
         (function() {
           var panel = document.getElementById('auction-panel');

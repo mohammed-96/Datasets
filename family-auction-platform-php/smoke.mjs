@@ -145,11 +145,13 @@ let auctionId = null;
 
   page.on("dialog", (d) => d.accept());
 
-  const rulesLink = page.locator("a", { hasText: "الرجاء الموافقة" });
+  // Match the rules gate by its destination, not its wording, so copy changes
+  // don't silently skip the accept step and leave no bid button.
+  const rulesLink = page.locator('main a[href*="page=rules"]');
   if (await rulesLink.count() > 0) {
-    await rulesLink.click();
+    await rulesLink.first().click();
     await page.waitForLoadState();
-    await page.locator("button", { hasText: "قرأت وأوافق" }).click();
+    await page.locator('main form button[type=submit]').click();
     await page.waitForLoadState();
   }
 
@@ -176,7 +178,7 @@ let auctionId = null;
 
   await page.goto(`${BASE}?page=home`);
   const homeText = await page.locator("body").innerText();
-  check("guest can view the catalogue", !page.url().includes("page=login") && homeText.includes("قائمة الآن"));
+  check("guest can view the catalogue", !page.url().includes("page=login") && homeText.includes("المزادات القائمة"));
   check("guest sees a sign-in prompt", homeText.includes("تسجيل الدخول"));
 
   await page.goto(`${BASE}?page=item&id=${auctionId}`);
