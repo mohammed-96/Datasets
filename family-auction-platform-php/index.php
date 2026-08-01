@@ -957,7 +957,8 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   footer .flinks { margin-top: 20px; display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
   footer .flinks a { font-size: 13.5px; color: var(--muted); }
   footer .flinks a:hover { color: var(--ink); }
-  footer .sig { margin-top: 26px; font-size: 10.5px; color: #b3aca2; }
+  footer .copy { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  footer .sig { margin-top: 8px; font-size: 10.5px; color: #b3aca2; }
 
   /* Phones first — this is where nearly all the bidding happens */
   @media (max-width: 700px) {
@@ -1034,6 +1035,7 @@ function layout_end(): void { ?>
     <a href="index.php">المقتنيات</a>
     <a href="index.php?page=rules">قواعد المزاد</a>
   </div>
+  <div class="copy">© <?= date('Y') ?> مزاد الذكريات — جميع الحقوق محفوظة</div>
   <div class="sig">مدار البيان</div>
 </footer>
 <script>
@@ -1631,7 +1633,7 @@ switch ($page) {
           <?php elseif (!$user['accepted_rules_at']): ?>
             <a class="btn grow btn-gold" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد</a>
           <?php elseif ($isTop): ?>
-            <button class="grow" disabled>أنت الأعلى</button>
+            <button class="grow" disabled>أنت أعلى مزايد حاليًا</button>
           <?php else: ?>
             <button class="grow btn-gold" id="js-bar-bid">زايد بـ <?= money($minNext) ?></button>
           <?php endif; ?>

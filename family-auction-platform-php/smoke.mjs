@@ -207,7 +207,9 @@ let auctionId = null;
   await page.goto(`${BASE}?page=my_bids`);
   check("guest cannot reach my-bids", await page.locator('input[name=pin]').count() === 1);
 
-  check("footer credits Madar Albayan", (await page.locator("footer").innerText()).includes("مدار البيان"));
+  const footText = await page.locator("footer").innerText();
+  check("footer credits Madar Albayan", footText.includes("مدار البيان"));
+  check("footer shows a current copyright", footText.includes("جميع الحقوق محفوظة") && footText.includes(String(new Date().getFullYear())));
   check("site is branded مزاد الذكريات", (await page.locator("header .brand").innerText()).includes("مزاد الذكريات"));
 
   // The home hero carries the initiative's copy and the charity pledge.
