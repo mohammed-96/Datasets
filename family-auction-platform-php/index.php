@@ -690,7 +690,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     padding: 14px 22px; display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 10px;
   }
-  header .brand { font-family: var(--font-display); font-weight: 700; font-size: 23px; }
+  header .brand { font-family: var(--font-display); font-weight: 700; font-size: 23px; color: var(--gold); }
   .header-actions { display: flex; align-items: center; gap: 16px; }
   .hlink { font-size: 14px; color: var(--muted); transition: color .2s; }
   .hlink:hover { color: var(--ink); }
@@ -746,15 +746,17 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   }
   input:focus, textarea:focus, select:focus { outline: none; border-color: var(--gold); }
 
+  /* Gold is the brand's colour, so it carries the actions rather than sitting on
+     the sidelines — but only on what is actually actionable. */
   button, .btn {
-    display: inline-block; background: var(--ink); color: #fff; border: none; border-radius: var(--radius);
-    padding: 15px 30px; font-size: 15px; font-weight: 500; font-family: inherit; cursor: pointer;
+    display: inline-block; background: var(--gold); color: #fff; border: none; border-radius: var(--radius);
+    padding: 15px 30px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
     transition: background .25s, opacity .25s;
   }
-  button:hover, .btn:hover { background: #000; }
+  button:hover, .btn:hover { background: var(--gold-dark); }
   button:disabled { background: #eeebe6 !important; color: var(--muted); cursor: default; }
-  .btn.secondary { background: none; color: var(--ink); border: 1px solid var(--line); }
-  .btn.secondary:hover { background: var(--paper); border-color: var(--ink); }
+  .btn.secondary { background: none; color: var(--gold-dark); border: 1px solid var(--gold); }
+  .btn.secondary:hover { background: var(--paper); border-color: var(--gold-dark); }
   .btn.danger { background: none; color: #a3341f; border: 1px solid #e8cfc8; }
   .btn.danger:hover { background: #fdf6f4; }
   .btn-sm { padding: 9px 18px; font-size: 13.5px; }
@@ -780,6 +782,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   .muted { color: var(--muted); font-size: 13.5px; }
   .price {
     font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2;
+    color: var(--gold-dark);
   }
   /* Small label above a value — the auction-catalogue caption */
   .eyebrow { font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
@@ -814,7 +817,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   /* Hero — the story-first opening an auction house leads with */
   .hero { text-align: center; padding: 26px 4px 4px; }
   .hero .kicker { font-size: 12px; color: var(--gold); margin-bottom: 16px; }
-  .hero h1 { font-size: 54px; line-height: 1.2; margin-bottom: 12px; }
+  .hero h1 { font-size: 54px; line-height: 1.2; margin-bottom: 12px; color: var(--gold); }
   .hero .tagline {
     font-family: var(--font-display); font-size: 22px; color: var(--ink);
     line-height: 1.8; margin: 0 auto; max-width: 470px;
@@ -842,12 +845,17 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     padding: 22px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
     margin-bottom: 24px;
   }
-  .feature .figures .val { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .feature .figures .val { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--gold-dark); }
 
-  /* Section heading — a rule and a caption, catalogue style */
+  /* Section heading — a rule and a caption, catalogue style, marked in gold */
   .section-head {
     margin: 64px 0 26px; padding-bottom: 14px; border-bottom: 1px solid var(--line);
     display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    position: relative;
+  }
+  .section-head::after {
+    content: ''; position: absolute; bottom: -1px; inset-inline-start: 0;
+    width: 64px; height: 2px; background: var(--gold);
   }
   .section-head h2 { margin: 0; }
   .section-head .sub { color: var(--muted); font-size: 13px; }
@@ -919,7 +927,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     display: flex; align-items: center; gap: 14px;
   }
   .bidbar .bar-info { display: flex; align-items: center; gap: 14px; }
-  .bidbar .val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .bidbar .val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; color: var(--gold-dark); }
   .bidbar .grow { flex: 1; text-align: center; padding: 15px 18px; font-size: 16px; }
   body.has-bidbar { padding-bottom: 96px; }
   /* On a phone the bar stacks rather than dropping the countdown — the closing
@@ -944,7 +952,7 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     max-width: 1120px; margin: 0 auto; padding: 56px 22px 44px;
     text-align: center; border-top: 1px solid var(--line);
   }
-  footer .fbrand { font-family: var(--font-display); font-size: 21px; font-weight: 700; }
+  footer .fbrand { font-family: var(--font-display); font-size: 21px; font-weight: 700; color: var(--gold); }
   footer .fline { font-size: 13px; color: var(--muted); margin-top: 6px; }
   footer .flinks { margin-top: 20px; display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
   footer .flinks a { font-size: 13.5px; color: var(--muted); }
@@ -1187,7 +1195,7 @@ function auction_card(array $a): string {
         . '<span class="badge ' . status_class($a['status']) . '">' . status_label($a['status']) . '</span>'
         . '<h3>' . h($a['title']) . '</h3>'
         . '<div class="eyebrow">' . ($a['status'] === 'ENDED' ? 'السعر النهائي' : 'السعر الحالي') . '</div>'
-        . '<div style="font-weight:600;font-variant-numeric:tabular-nums">' . money($price) . '</div>'
+        . '<div style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--gold-dark)">' . money($price) . '</div>'
         . '</div></a>';
 }
 
@@ -1257,7 +1265,7 @@ switch ($page) {
         <div style="max-width:380px;margin:44px auto 0">
           <div style="text-align:center;margin-bottom:26px">
             <div class="kicker" style="font-size:10.5px;letter-spacing:.34em;color:var(--gold-dark);font-weight:600;margin-bottom:12px">مبادرة عائلية</div>
-            <h1 style="font-size:40px">مزاد الذكريات</h1>
+            <h1 style="font-size:40px;color:var(--gold)">مزاد الذكريات</h1>
             <p class="tagline" style="font-family:var(--font-display);font-size:17px;color:var(--gold-dark);margin:6px 0 0">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
           </div>
           <div class="card">
@@ -1401,7 +1409,7 @@ switch ($page) {
 
         <?php if ($ended): ?>
         <div class="section-head">
-          <h2>المحفوظات</h2>
+          <h2>المزادات المنتهية</h2>
           <div class="sub">ذكرياتٌ وجدت أصحابها</div>
         </div>
         <div class="grid"><?php foreach ($ended as $a) echo auction_card($a); ?></div>
@@ -1493,7 +1501,7 @@ switch ($page) {
                   <div style="display:flex;gap:34px;flex-wrap:wrap;margin-top:20px">
                     <div>
                       <div class="eyebrow">المزايدة القادمة</div>
-                      <div style="font-weight:600;font-variant-numeric:tabular-nums"><span id="js-min-next"><?= money($minNext) ?></span></div>
+                      <div style="font-weight:600;font-variant-numeric:tabular-nums;color:var(--gold-dark)"><span id="js-min-next"><?= money($minNext) ?></span></div>
                     </div>
                     <div>
                       <div class="eyebrow">عدد المزايدين</div>
