@@ -343,6 +343,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($u && $u['status'] === 'active' && password_verify($pin, $u['pin_hash'])) {
             session_regenerate_id(true);
             $_SESSION['user_id'] = $u['id'];
+            // Return the visitor to the page they came from (e.g. the item they were
+            // browsing as a guest). Only same-file paths are allowed, never an
+            // external URL, so this can't be used to redirect somewhere else.
+            $next = (string)($_POST['next'] ?? '');
+            if ($next !== '' && str_starts_with($next, 'index.php?') && !str_contains($next, "\n")) {
+                redirect($next);
+            }
             redirect($u['role'] === 'admin' ? 'index.php?page=admin' : 'index.php');
         }
         redirect('index.php?page=login&error=' . urlencode('رقم الجوال أو الرقم السري غير صحيح'));
@@ -376,9 +383,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // You were already winning — nothing to do, just refresh to the truth.
             redirect('index.php?page=item&id=' . $auctionId);
         } catch (BidError $e) {
-            redirect('index.php?page=item&id=' . $auctionId . '&error=' . urlencode($e->getMessage()));
+            // bid=no marks a rejected bid so the page can sound the rejection tone.
+            redirect('index.php?page=item&id=' . $auctionId . '&bid=no&error=' . urlencode($e->getMessage()));
         }
-        redirect('index.php?page=item&id=' . $auctionId);
+        // bid=ok marks an approved bid so the page can sound the approval tone.
+        redirect('index.php?page=item&id=' . $auctionId . '&bid=ok');
     }
 
     // ---- Admin mutations ----
@@ -590,7 +599,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
     // Safari caches identical fetch() GETs aggressively; force it to always ask.
     header('Cache-Control: no-store, no-cache, must-revalidate');
     header('Pragma: no-cache');
-    if (!$me) { http_response_code(401); echo json_encode(['error' => 'unauthorized']); exit; }
+    // Guests get the same live price/bid feed as members — they just have no
+    // "mine"/"top bidder" state, since those need an account.
+    $myId = $me ? (int)$me['id'] : 0;
     $auction = get_auction((int)($_GET['id'] ?? 0));
     if (!$auction) { http_response_code(404); echo json_encode(['error' => 'not_found']); exit; }
     $bids = active_bids((int)$auction['id']);
@@ -601,11 +612,11 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
         'current_price' => (int)$auction['current_price'],
         'end_at' => $auction['end_at'],
         'min_next_bid' => min_next_bid($auction, $hasBids),
-        'is_top_bidder' => $topBid && (int)$topBid['user_id'] === (int)$me['id'],
-        'has_user_bid' => (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === (int)$me['id']),
+        'is_top_bidder' => $topBid && (int)$topBid['user_id'] === $myId,
+        'has_user_bid' => (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === $myId),
         'winner_alias' => null,
         'winning_bid' => $auction['winning_bid'] ? (int)$auction['winning_bid'] : null,
-        'bids' => array_map(fn($b) => ['alias' => $b['alias'], 'amount' => (int)$b['amount'], 'time' => date('h:i A', strtotime($b['created_at'])), 'is_mine' => (int)$b['user_id'] === (int)$me['id']], $bids),
+        'bids' => array_map(fn($b) => ['alias' => $b['alias'], 'amount' => (int)$b['amount'], 'time' => date('h:i A', strtotime($b['created_at'])), 'is_mine' => (int)$b['user_id'] === $myId], $bids),
     ]);
     exit;
 }
@@ -619,59 +630,185 @@ function layout_start(string $title, ?array $user): void {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title><?= h($title) ?> — المزاد العائلي</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", Tahoma, Arial, sans-serif; margin: 0; background: #f7f7f5; color: #1c1917; }
-  a { color: inherit; text-decoration: none; }
-  header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  header .brand { font-weight: 800; font-size: 18px; }
-  nav { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 10px; }
-  nav a, nav button { background: #fff; border: 1px solid #ddd; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 700; color: #444; cursor: pointer; }
-  nav a.active { background: #b45309; color: #fff; border-color: #b45309; }
-  main { max-width: 1000px; margin: 0 auto; padding: 16px; }
-  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-  .item-card { display: block; background: #fff; border: 1px solid #e5e5e5; border-radius: 14px; overflow: hidden; }
-  .item-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #eee; }
-  .item-card .body { padding: 10px; }
-  .item-card h3 { margin: 0 0 4px; font-size: 15px; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-  .badge.live { background: #d1fae5; color: #065f46; }
-  .badge.upcoming { background: #dbeafe; color: #1e40af; }
-  .badge.ended { background: #e5e5e5; color: #444; }
-  .badge.cancelled, .badge.suspended { background: #fee2e2; color: #991b1b; }
-  .user-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: #d1fae5; color: #065f46; }
-  label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-  input[type=text], input[type=tel], input[type=password], input[type=number], input[type=datetime-local], textarea, select {
-    width: 100%; padding: 9px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; margin-bottom: 12px; font-family: inherit;
+  :root {
+    --ink: #1d1d1f;          /* primary text */
+    --muted: #6e6e73;        /* secondary text */
+    --bg: #f5f5f7;           /* page background */
+    --surface: #ffffff;      /* cards */
+    --line: rgba(0,0,0,.09); /* hairlines */
+    --gold: #9c7c3c;         /* accent — the one colour that carries the brand */
+    --gold-dark: #866832;
+    --radius: 20px;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
   }
-  button, .btn { display: inline-block; background: #b45309; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; }
-  .btn.secondary { background: #fff; color: #333; border: 1px solid #ccc; }
-  .btn.danger { background: #fff; color: #b91c1c; border: 1px solid #f0b4b4; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table th, table td { padding: 8px; text-align: right; border-top: 1px solid #eee; }
-  .error { background: #fee2e2; color: #991b1b; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
-  .success-box { background: #d1fae5; color: #065f46; padding: 16px; border-radius: 10px; text-align: center; }
-  .muted { color: #777; font-size: 13px; }
-  .price { font-size: 30px; font-weight: 800; }
-  .thumbs { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-  .thumbs img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+    margin: 0; background: var(--bg); color: var(--ink);
+    -webkit-font-smoothing: antialiased; line-height: 1.55;
+  }
+  a { color: inherit; text-decoration: none; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -.022em; margin: 0 0 4px; }
+  h2 { font-size: 21px; font-weight: 650; letter-spacing: -.018em; margin: 28px 0 12px; }
+  h3 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+
+  /* Frosted, sticky header — the Apple signature */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(250,250,252,.82);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--line);
+    padding: 11px 20px; display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+  }
+  header .brand { font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+  .header-actions { display: flex; align-items: center; gap: 14px; }
+  .hlink { font-size: 14px; color: var(--muted); transition: color .2s; }
+  .hlink:hover { color: var(--ink); }
+
+  nav { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0; max-width: 1040px; margin: 0 auto; }
+  nav a, nav button {
+    background: rgba(0,0,0,.04); border: none; border-radius: 980px; padding: 7px 15px;
+    font-size: 13.5px; font-weight: 500; color: var(--ink); cursor: pointer; transition: background .2s;
+  }
+  nav a:hover { background: rgba(0,0,0,.08); }
+  nav a.active { background: var(--gold); color: #fff; }
+
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 20px 40px; }
+
+  .card {
+    background: var(--surface); border-radius: var(--radius); padding: 24px;
+    margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 16px; }
+
+  .item-card {
+    display: block; background: var(--surface); border-radius: 18px; overflow: hidden;
+    box-shadow: var(--shadow); transition: transform .25s cubic-bezier(.2,.8,.3,1), box-shadow .25s;
+  }
+  .item-card:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(0,0,0,.05), 0 16px 36px rgba(0,0,0,.09); }
+  .item-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #ececee; }
+  .item-card .body { padding: 14px 15px 16px; }
+  .item-card h3 { margin: 7px 0 3px; font-size: 15px; font-weight: 600; }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 980px;
+    font-size: 11px; font-weight: 600; letter-spacing: .01em;
+  }
+  .badge.live { background: rgba(48,209,88,.14); color: #1a7f37; }
+  .badge.upcoming { background: rgba(0,113,227,.12); color: #0058b0; }
+  .badge.ended { background: rgba(0,0,0,.06); color: var(--muted); }
+  .badge.cancelled, .badge.suspended { background: rgba(255,59,48,.12); color: #c0271d; }
+  .user-pill {
+    display: inline-block; padding: 4px 12px; border-radius: 980px; font-size: 13px;
+    font-weight: 550; background: rgba(156,124,60,.13); color: var(--gold-dark);
+  }
+
+  label { display: block; font-weight: 550; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type=text], input[type=tel], input[type=password], input[type=number], input[type=datetime-local], textarea, select {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+    font-size: 16px; /* 16px keeps iOS from zooming on focus */
+    margin-bottom: 16px; font-family: inherit; background: #fff; color: var(--ink);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--gold); box-shadow: 0 0 0 4px rgba(156,124,60,.13);
+  }
+
+  button, .btn {
+    display: inline-block; background: var(--gold); color: #fff; border: none; border-radius: 14px;
+    padding: 13px 22px; font-size: 15.5px; font-weight: 600; font-family: inherit; cursor: pointer;
+    letter-spacing: -.01em; transition: background .2s, transform .12s, opacity .2s;
+  }
+  button:hover, .btn:hover { background: var(--gold-dark); }
+  button:active, .btn:active { transform: scale(.975); }
+  button:disabled { background: rgba(0,0,0,.08) !important; color: var(--muted); cursor: default; transform: none; }
+  .btn.secondary { background: rgba(0,0,0,.05); color: var(--ink); }
+  .btn.secondary:hover { background: rgba(0,0,0,.09); }
+  .btn.danger { background: rgba(255,59,48,.1); color: #c0271d; }
+  .btn.danger:hover { background: rgba(255,59,48,.16); }
+  .btn-sm { padding: 8px 16px; font-size: 14px; border-radius: 980px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  table th {
+    padding: 10px; text-align: right; font-weight: 550; font-size: 12.5px;
+    color: var(--muted); border-bottom: 1px solid var(--line);
+  }
+  table td { padding: 12px 10px; text-align: right; border-top: 1px solid var(--line); }
+  table td:nth-child(2) { font-variant-numeric: tabular-nums; }
+
+  .error {
+    background: rgba(255,59,48,.1); color: #c0271d; padding: 13px 16px;
+    border-radius: 14px; margin-bottom: 18px; font-size: 14.5px; font-weight: 500;
+  }
+  .success-box {
+    background: rgba(48,209,88,.13); color: #1a7f37; padding: 20px;
+    border-radius: 16px; text-align: center; font-size: 16px;
+  }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .price {
+    font-size: 42px; font-weight: 680; letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums; line-height: 1.15;
+  }
+  .thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; box-shadow: var(--shadow); }
+
+  /* Guest banner — invites sign-in without nagging */
+  .guest-note {
+    background: var(--surface); border-radius: 16px; padding: 14px 18px; margin-bottom: 18px;
+    box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap; font-size: 14.5px;
+  }
+
+  footer {
+    max-width: 1040px; margin: 0 auto; padding: 32px 20px 40px;
+    text-align: center; border-top: 1px solid var(--line);
+  }
+  footer .by { font-size: 13px; color: var(--muted); }
+  footer .co { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; margin-top: 2px; }
+  footer .en { font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-top: 3px; }
+
+  @media (max-width: 500px) {
+    h1 { font-size: 24px; }
+    main { padding: 18px 16px 32px; }
+    .card { padding: 20px; border-radius: 18px; }
+    .price { font-size: 38px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 13px; }
+  }
 </style>
 </head>
 <body>
-<?php if ($user): ?>
+<?php
+    $onLoginPage = ($_GET['page'] ?? '') === 'login';
+    // Send a guest back to the item they were viewing after they sign in.
+    $loginHref = 'index.php?page=login';
+    if (($_GET['page'] ?? '') === 'item' && !empty($_GET['id'])) {
+        $loginHref .= '&next=' . urlencode('index.php?page=item&id=' . (int)$_GET['id']);
+    }
+?>
+<?php if (!$onLoginPage): ?>
 <header>
   <a class="brand" href="index.php">المزاد العائلي</a>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <?php if ($user['role'] === 'admin'): ?><a href="index.php?page=admin">لوحة الإدارة</a><?php endif; ?>
-    <a href="index.php?page=my_bids">مزايداتي</a>
-    <span class="user-pill"><?= h($user['alias']) ?></span>
-    <form method="post" style="margin:0"><input type="hidden" name="action" value="logout"><button class="btn secondary" type="submit">خروج</button></form>
+  <div class="header-actions">
+    <?php if ($user): ?>
+      <?php if ($user['role'] === 'admin'): ?><a class="hlink" href="index.php?page=admin">لوحة الإدارة</a><?php endif; ?>
+      <a class="hlink" href="index.php?page=my_bids">مزايداتي</a>
+      <span class="user-pill"><?= h($user['alias']) ?></span>
+      <form method="post" style="margin:0"><input type="hidden" name="action" value="logout"><button class="btn secondary btn-sm" type="submit">خروج</button></form>
+    <?php else: ?>
+      <a class="btn btn-sm" href="<?= h($loginHref) ?>">تسجيل الدخول</a>
+    <?php endif; ?>
   </div>
 </header>
-<?php if ($user['role'] === 'admin'): ?>
+<?php endif; ?>
+<?php if ($user && $user['role'] === 'admin'): ?>
 <nav>
   <a href="index.php?page=admin">لوحة التحكم</a>
   <a href="index.php?page=admin_items">القطع</a>
@@ -681,7 +818,6 @@ function layout_start(string $title, ?array $user): void {
   <a href="index.php?page=admin_audit">سجل العمليات</a>
 </nav>
 <?php endif; ?>
-<?php endif; ?>
 <main>
 <?php
     if (!empty($_GET['error'])) echo '<div class="error">' . h($_GET['error']) . '</div>';
@@ -689,6 +825,83 @@ function layout_start(string $title, ?array $user): void {
 
 function layout_end(): void { ?>
 </main>
+<footer>
+  <div class="by">تشغيل وتطوير</div>
+  <div class="co">شركة مدار البيان</div>
+  <div class="en">Powered by Madar Albayan</div>
+</footer>
+<script>
+/* Audible bid feedback — a soft chime plus a spoken result, so an approved or
+   rejected bid is unmistakable even without reading the screen. Sound is
+   generated in the browser (no audio files to upload). */
+(function () {
+  var ctx = null;
+  function unlock() {                     // must run inside a tap to satisfy iOS
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) { ctx = null; }
+  }
+  function tone(freq, startAt, dur, peak) {
+    if (!ctx) return;
+    var osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + startAt;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);                        // soft attack/decay
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.03);     // keeps it gentle,
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);    // never a harsh beep
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function say(text) {
+    try {
+      if (!window.speechSynthesis) return;
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ar-SA'; u.rate = 1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  function feedback(ok) {
+    unlock();
+    if (ok) { tone(784, 0, .18, .16); tone(1175, .13, .28, .14); say('تمت المزايدة'); }
+    else    { tone(320, 0, .2, .16);  tone(200, .16, .32, .15);  say('لم تتم المزايدة'); }
+  }
+  window.__bidFeedback = feedback;
+  window.__unlockAudio = unlock;
+
+  // Sound the result carried in the URL after a normal (non-JS) form post.
+  var m = location.search.match(/[?&]bid=(ok|no)\b/);
+  if (m) {
+    var ok = m[1] === 'ok';
+    document.addEventListener('click', function once() {   // fallback if autoplay is blocked
+      document.removeEventListener('click', once);
+    });
+    setTimeout(function () { feedback(ok); }, 120);
+  }
+
+  // Bid form: keep the confirm dialog, then post in the background so the sound
+  // can play while the tap is still "live" (iOS blocks audio otherwise).
+  var form = document.getElementById('bid-form');
+  if (form && window.fetch) {
+    form.addEventListener('submit', function (e) {
+      if (e.defaultPrevented) return;      // the confirm() dialog was cancelled
+      e.preventDefault();
+      unlock();
+      window.__bidding = true;             // pause polling until we navigate
+      var btn = form.querySelector('button[type=submit]');
+      if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+      fetch('index.php', { method: 'POST', body: new FormData(form), credentials: 'same-origin' })
+        .then(function (r) {
+          var ok = r.url.indexOf('bid=ok') !== -1;
+          feedback(ok);
+          setTimeout(function () { location.href = r.url; }, ok ? 750 : 1000);
+        })
+        .catch(function () { window.__bidding = false; form.submit(); });
+    });
+  }
+})();
+</script>
 </body>
 </html>
 <?php }
@@ -723,19 +936,25 @@ function fetch_auctions(string $whereSql, array $params = []): array {
 // ---- Router ----
 
 $user = current_user();
-$page = $_GET['page'] ?? ($user ? 'home' : 'login');
-if (!$user && !in_array($page, ['login'], true)) $page = 'login';
+// Browsing is public: anyone can see the catalogue and any item, signed in or not.
+// Bidding, "my bids" and the admin area still require an account.
+const PUBLIC_PAGES = ['login', 'home', 'item'];
+$page = $_GET['page'] ?? 'home';
+if (!$user && !in_array($page, PUBLIC_PAGES, true)) $page = 'login';
 
 switch ($page) {
     case 'login':
+        $next = (string)($_GET['next'] ?? '');
+        if (!str_starts_with($next, 'index.php?')) $next = '';
         layout_start('تسجيل الدخول', null);
         ?>
-        <div style="max-width:360px;margin:60px auto 0">
-          <h1 style="text-align:center">المزاد العائلي</h1>
-          <p class="muted" style="text-align:center">منصة خاصة لإدارة مزادات العائلة</p>
+        <div style="max-width:380px;margin:48px auto 0">
+          <h1 style="text-align:center;font-size:32px">المزاد العائلي</h1>
+          <p class="muted" style="text-align:center;margin-bottom:26px">منصة خاصة لإدارة مزادات العائلة</p>
           <div class="card">
             <form method="post">
               <input type="hidden" name="action" value="login">
+              <?php if ($next !== ''): ?><input type="hidden" name="next" value="<?= h($next) ?>"><?php endif; ?>
               <label>رقم الجوال</label>
               <input type="tel" name="phone" required>
               <label>الرقم السري</label>
@@ -743,6 +962,9 @@ switch ($page) {
               <button type="submit" style="width:100%">تسجيل الدخول</button>
             </form>
           </div>
+          <p style="text-align:center;margin-top:20px">
+            <a class="hlink" href="index.php">تصفّح المزادات بدون تسجيل ←</a>
+          </p>
           <p class="muted" style="text-align:center">الحسابات تُنشأ مسبقًا بواسطة مدير المزاد فقط</p>
         </div>
         <?php
@@ -776,13 +998,20 @@ switch ($page) {
         break;
 
     case 'home':
-        require_login();
         layout_start('الرئيسية', $user);
         $live = fetch_auctions("a.status = 'LIVE' ORDER BY a.end_at ASC");
         $upcoming = fetch_auctions("a.status = 'UPCOMING' ORDER BY a.start_at ASC");
         $ended = fetch_auctions("a.status = 'ENDED' ORDER BY a.end_at DESC LIMIT 30");
         ?>
-        <h1>مرحبًا، <?= h($user['alias']) ?></h1>
+        <?php if ($user): ?>
+          <h1>مرحبًا، <?= h($user['alias']) ?></h1>
+        <?php else: ?>
+          <h1>المزاد العائلي</h1>
+          <div class="guest-note">
+            <span>يمكنك تصفّح جميع المزادات والأسعار بحرّية. للمزايدة يلزم تسجيل الدخول.</span>
+            <a class="btn btn-sm" href="index.php?page=login">تسجيل الدخول</a>
+          </div>
+        <?php endif; ?>
         <h2>قائمة الآن (<?= count($live) ?>)</h2>
         <div class="grid"><?php foreach ($live as $a) echo auction_card($a); ?></div>
         <?php if (!$live): ?><p class="muted">لا توجد مزادات قائمة حاليًا</p><?php endif; ?>
@@ -820,7 +1049,6 @@ switch ($page) {
         break;
 
     case 'item':
-        require_login();
         $id = (int)($_GET['id'] ?? 0);
         $auction = get_auction($id);
         if (!$auction) { http_response_code(404); layout_start('غير موجود', $user); echo '<p>القطعة غير موجودة.</p>'; layout_end(); break; }
@@ -831,8 +1059,9 @@ switch ($page) {
         $bids = active_bids($id);
         $hasBids = count($bids) > 0;
         $topBid = $bids[0] ?? null;
-        $isTop = $topBid && (int)$topBid['user_id'] === (int)$user['id'];
-        $hasUserBid = (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === (int)$user['id']);
+        $myId = $user ? (int)$user['id'] : 0;   // 0 = guest, matches no bidder
+        $isTop = $topBid && (int)$topBid['user_id'] === $myId;
+        $hasUserBid = (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === $myId);
         $minNext = min_next_bid($auction, $hasBids);
         $winnerAlias = null;
         if ($auction['winner_user_id']) {
@@ -880,12 +1109,14 @@ switch ($page) {
                 </p>
                 <div class="muted">ينتهي بعد <b id="js-countdown" data-end="<?= h($auction['end_at']) ?>"></b></div>
                 <p class="muted">ينتهي: <?= fmt_dt($auction['end_at']) ?></p>
-                <?php if (!$user['accepted_rules_at']): ?>
+                <?php if (!$user): ?>
+                  <a class="btn" style="display:block;text-align:center;margin-top:10px" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
+                <?php elseif (!$user['accepted_rules_at']): ?>
                   <a class="btn" style="display:block;text-align:center;margin-top:10px" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الرجاء الموافقة على قواعد المزاد للمشاركة</a>
                 <?php elseif ($isTop): ?>
-                  <button disabled style="width:100%;margin-top:10px;background:#ccc" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
+                  <button disabled style="width:100%;margin-top:10px" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
                 <?php else: ?>
-                  <form method="post" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
+                  <form method="post" id="bid-form" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
                     <input type="hidden" name="action" value="bid">
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
                     <input type="hidden" name="amount" value="<?= $minNext ?>">
@@ -946,6 +1177,7 @@ switch ($page) {
           setInterval(tick, 1000);
 
           function poll() {
+            if (window.__bidding) return;   // a bid is being submitted — don't reload under it
             // The _ param + no-store keep Safari from serving a cached response
             // (which would freeze the price and stop auto-refresh).
             fetch('index.php?ajax=status&id=' + panel.dataset.id + '&_=' + Date.now(), { cache: 'no-store' }).then(function(r){return r.json();}).then(function(data) {

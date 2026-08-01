@@ -37,6 +37,11 @@ add every real bidder yourself from the admin panel.
 ## What's included
 
 - Phone + PIN login (bcrypt via PHP's `password_hash`), PHP native sessions
+- **Public browsing** — anyone can view the catalogue, item pages and live prices
+  without an account. Bidding, "مزايداتي" and the admin area still require a login.
+- **Audible bid feedback** — an approved bid plays a rising chime and says
+  "تمت المزايدة"; a rejected one plays a low tone and says "لم تتم المزايدة".
+  Generated in the browser, so there are no audio files to upload.
 - Alias-only bidder identity — real names/phones are only ever shown to the admin
 - Bidding with minimum-increment enforcement, self-outbid prevention, and
   soft-close anti-sniping (extends the auction if a bid lands in the last N minutes)

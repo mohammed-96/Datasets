@@ -147,6 +147,9 @@ let auctionId = null;
   const bidBtn = page.locator("#js-bid-btn");
   if (await bidBtn.count() > 0 && await bidBtn.isEnabled()) {
     await bidBtn.click();
+    // The bid posts in the background, plays the result chime, then navigates —
+    // so wait for that deferred navigation rather than the click itself.
+    await page.waitForURL(/bid=(ok|no)/, { timeout: 10000 });
     await page.waitForLoadState();
     const priceAfter = await page.locator("#js-price").innerText();
     check("price shows the bid amount", priceAfter.includes("1,000") || priceAfter.includes("1000"));
@@ -155,6 +158,45 @@ let auctionId = null;
   } else {
     check("bid button available", false);
   }
+  await page.close();
+}
+
+// ---- Public (signed-out) flow: browsing works, bidding is gated ----
+{
+  const page = await browser.newPage();   // fresh context-less page = no session
+
+  await page.goto(`${BASE}?page=home`);
+  const homeText = await page.locator("body").innerText();
+  check("guest can view the catalogue", !page.url().includes("page=login") && homeText.includes("قائمة الآن"));
+  check("guest sees a sign-in prompt", homeText.includes("تسجيل الدخول"));
+
+  await page.goto(`${BASE}?page=item&id=${auctionId}`);
+  const itemText = await page.locator("body").innerText();
+  check("guest can view an item page", !page.url().includes("page=login") && itemText.includes("سجل المزايدات"));
+  check("guest sees the live price", itemText.includes("1,000") || itemText.includes("1000"));
+  check("guest is asked to sign in to bid", itemText.includes("سجّل الدخول للمزايدة"));
+  check("guest has no bid form", await page.locator("#bid-form").count() === 0);
+
+  // Live price feed must work for guests too (no 401).
+  const status = await page.request.get(`${BASE}?ajax=status&id=${auctionId}`);
+  const json = await status.json();
+  check("guest gets the live status feed", status.ok() && json.current_price === 1000);
+  check("guest feed exposes no personal state", json.is_top_bidder === false && json.has_user_bid === false);
+
+  // Private areas stay private: the login form is rendered in place of the page,
+  // so assert on what is actually shown rather than on the URL.
+  await page.goto(`${BASE}?page=admin`);
+  let t = await page.locator("body").innerText();
+  check("guest cannot reach admin", await page.locator('input[name=pin]').count() === 1 && !t.includes("عدد القطع"));
+
+  await page.goto(`${BASE}?page=admin_users`);
+  t = await page.locator("body").innerText();
+  check("guest cannot see the user list", !t.includes("الاسم الحقيقي") && !t.includes("0500000000"));
+
+  await page.goto(`${BASE}?page=my_bids`);
+  check("guest cannot reach my-bids", await page.locator('input[name=pin]').count() === 1);
+
+  check("footer credits Madar Albayan", (await page.locator("footer").innerText()).includes("مدار البيان"));
   await page.close();
 }
 
