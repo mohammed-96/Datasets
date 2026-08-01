@@ -208,11 +208,12 @@ let auctionId = null;
   check("footer credits Madar Albayan", (await page.locator("footer").innerText()).includes("مدار البيان"));
   check("site is branded مزاد الذكريات", (await page.locator("header .brand").innerText()).includes("مزاد الذكريات"));
 
-  // Story page is public and carries the initiative's copy.
-  await page.goto(`${BASE}?page=about`);
-  const about = await page.locator("body").innerText();
-  check("story page is public", about.includes("مزاد الذكريات") && about.includes("كل قطعةٍ تروي قصة"));
-  check("story page mentions the charity pledge", about.includes("ثلث صافي قيمة المزاد"));
+  // The home hero carries the initiative's copy and the charity pledge.
+  await page.goto(`${BASE}?page=home`);
+  const hero = await page.locator("body").innerText();
+  check("home shows the tagline", hero.includes("كل قطعةٍ تروي قصة"));
+  check("charity pledge covers all proceeds", hero.includes("جميعُ صافي قيمة المزاد"));
+  check("no leftover story-page links", !hero.includes("قصة المزاد"));
   await page.close();
 }
 

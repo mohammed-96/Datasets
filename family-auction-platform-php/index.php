@@ -894,7 +894,6 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
       <span class="user-pill"><?= h($user['alias']) ?></span>
       <form method="post" style="margin:0"><input type="hidden" name="action" value="logout"><button class="btn secondary btn-sm" type="submit">خروج</button></form>
     <?php else: ?>
-      <a class="hlink" href="index.php?page=about">قصة المزاد</a>
       <a class="btn btn-sm" href="<?= h($loginHref) ?>">تسجيل الدخول</a>
     <?php endif; ?>
   </div>
@@ -922,7 +921,6 @@ function layout_end(): void { ?>
   <div class="fline">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا</div>
   <div class="flinks">
     <a href="index.php">المقتنيات</a>
-    <a href="index.php?page=about">قصة المزاد</a>
     <a href="index.php?page=rules">قواعد المزاد</a>
   </div>
   <div class="sig">مدار البيان</div>
@@ -1069,8 +1067,11 @@ function fetch_auctions(string $whereSql, array $params = []): array {
 $user = current_user();
 // Browsing is public: anyone can see the catalogue and any item, signed in or not.
 // Bidding, "my bids" and the admin area still require an account.
-const PUBLIC_PAGES = ['login', 'home', 'item', 'about', 'rules'];
+const PUBLIC_PAGES = ['login', 'home', 'item', 'rules'];
 $page = $_GET['page'] ?? 'home';
+// The story page was retired — send any old link to the catalogue instead of
+// dead-ending a visitor on the login screen.
+if ($page === 'about') redirect('index.php');
 if (!$user && !in_array($page, PUBLIC_PAGES, true)) $page = 'login';
 
 switch ($page) {
@@ -1135,38 +1136,6 @@ switch ($page) {
         layout_end();
         break;
 
-    case 'about':
-        layout_start('قصة المزاد', $user);
-        ?>
-        <div class="hero" style="padding-top:26px">
-          <div class="kicker">قصة المزاد</div>
-          <h1>مزاد الذكريات</h1>
-          <p class="tagline">كل قطعةٍ تروي قصة... وكل قصةٍ تحفظ أثرًا.</p>
-        </div>
-        <hr class="rule">
-        <div class="card story">
-          <p>مرحبًا بكم في <strong>مزاد الذكريات</strong>، وهي مبادرة عائلية مستوحاة من أعرق دور المزادات العالمية، أُطلقت وفاءً لذكرى والدتنا – رحمها الله – واحتفاءً بإرثها الذي ترك أثره في حياتنا جميعًا.</p>
-          <p class="pull">في هذا المزاد، لا تُعرض المقتنيات لقيمتها المادية فحسب، بل لما تحمله من حكايات وذكريات.</p>
-          <p>فلكل قطعة تاريخها، ولكل مجوهرة قصة، ولكل أثر معنى يستحق أن يُروى، ولما تمثله من محطاتٍ في حياة صاحبتها.</p>
-          <h3 style="margin:24px 0 10px">ستجدون هنا</h3>
-          <ul>
-            <li>إعلانات المزاد ومراحله.</li>
-            <li>استعراض المقتنيات وصورها.</li>
-            <li>قصص مختارة لبعض القطع وتفاصيلها.</li>
-            <li>مواعيد وآلية المشاركة في المزايدة.</li>
-            <li>جميع المستجدات المتعلقة بالمزاد.</li>
-          </ul>
-          <h3 style="margin:24px 0 10px">أثرٌ يتجاوز الذكرى</h3>
-          <p>نأمل أن يكون لهذا المزاد أثرٌ يتجاوز حفظ الذكريات، إذ سيُخصص <strong>ثلث صافي قيمة المزاد</strong> – بإذن الله – للأعمال الخيرية، سائلين الله أن يجعلها صدقةً جارية في ميزان حسنات والدتنا، وأن يبارك في أثرها.</p>
-          <p>ونرحب بكل من يود مشاركة قصة أو ذكرى أو معلومة عن إحدى المقتنيات، لتبقى جزءًا من هذا الإرث الجميل، ولتُحفظ للأجيال القادمة.</p>
-          <div style="text-align:center;margin-top:26px">
-            <a class="btn" href="index.php">تصفّح المقتنيات</a>
-          </div>
-        </div>
-        <?php
-        layout_end();
-        break;
-
     case 'home':
         layout_start('الرئيسية', $user);
         $live = fetch_auctions("a.status = 'LIVE' ORDER BY a.end_at ASC");
@@ -1186,10 +1155,9 @@ switch ($page) {
             <p class="lede">مبادرة عائلية مستوحاة من أعرق دور المزادات العالمية، أُطلقت وفاءً لذكرى والدتنا – رحمها الله – واحتفاءً بإرثها. لا تُعرض المقتنيات لقيمتها المادية فحسب، بل لما تحمله من حكايات وذكريات.</p>
             <div class="hero-actions">
               <a class="btn" href="#المقتنيات">تصفّح المقتنيات</a>
-              <a class="btn secondary" href="index.php?page=about">قصة المزاد</a>
             </div>
             <hr class="rule">
-            <span class="chip">ثلثُ صافي قيمة المزاد يُخصَّص للأعمال الخيرية</span>
+            <span class="chip">جميعُ صافي قيمة المزاد يُخصَّص للأعمال الخيرية</span>
           </div>
         <?php endif; ?>
 
