@@ -611,6 +611,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
         'status' => $auction['status'],
         'current_price' => (int)$auction['current_price'],
         'end_at' => $auction['end_at'],
+        'end_ts' => strtotime($auction['end_at']) * 1000,   // timezone-proof, for the countdown
         'min_next_bid' => min_next_bid($auction, $hasBids),
         'is_top_bidder' => $topBid && (int)$topBid['user_id'] === $myId,
         'has_user_bid' => (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === $myId),
@@ -643,7 +644,7 @@ function layout_start(string $title, ?array $user): void {
 // system Arabic face (SF Arabic on iPhone, which is already handsome) and swaps
 // to Amiri / IBM Plex once they arrive. On a weak connection the site still shows
 // instantly instead of waiting on a font server.
-$fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap';
+$fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=El+Messiri:wght@400;500;600;700&display=swap';
 ?>
 <link rel="stylesheet" href="<?= h($fontsHref) ?>" media="print" onload="this.media='all';this.onload=null">
 <noscript><link rel="stylesheet" href="<?= h($fontsHref) ?>"></noscript>
@@ -660,11 +661,12 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     --gold: #8a6a35;
     --gold-dark: #6f5429;
     --radius: 4px;           /* barely rounded; the page reads as print, not app */
-    /* Amiri (classical Naskh) sets the name and headings the way an auction
-       house sets its wordmark; IBM Plex Sans Arabic keeps the interface crisp on
-       small screens. Both fall back to iOS's own SF Arabic if they don't load. */
+    /* Two Arabic faces that share a calligraphic warmth, so the page reads as one
+       voice: Amiri (classical Naskh) sets the name and headings the way an auction
+       house sets its wordmark, and El Messiri — distinctive letterforms, modern but
+       rooted — carries the interface. Both fall back to iOS's own SF Arabic. */
     --font-display: 'Amiri', 'SF Arabic', Georgia, serif;
-    --font-ui: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'SF Arabic', 'Segoe UI', Tahoma, sans-serif;
+    --font-ui: 'El Messiri', 'SF Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { -webkit-text-size-adjust: 100%; }
@@ -864,6 +866,40 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
   .specs dt { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; }
   .specs dd { margin: 0; font-size: 15.5px; font-weight: 500; }
 
+  /* Countdown — the single most time-critical number on the page, so it is
+     given real size, separated units, and a red state in the final minutes. */
+  .cd-label { font-size: 12px; color: var(--muted); margin-bottom: 9px; }
+  .cd-row { display: flex; gap: 8px; }
+  .cd-seg {
+    flex: 1; max-width: 92px; text-align: center; background: var(--paper);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 6px 9px;
+    transition: background .3s, border-color .3s;
+  }
+  .cd-n {
+    font-size: 30px; font-weight: 600; line-height: 1.05;
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
+  }
+  .cd-u { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .countdown.urgent .cd-seg { background: #fdf3f1; border-color: #e3b8ad; }
+  .countdown.urgent .cd-n { color: #b1432c; }
+  .countdown.over .cd-n { color: var(--muted); }
+  /* Compact form for the sticky bar */
+  .countdown.mini .cd-label { display: none; }
+  .countdown.mini .cd-row { gap: 4px; }
+  .countdown.mini .cd-seg { padding: 4px 5px 3px; max-width: 44px; border-radius: 3px; }
+  .countdown.mini .cd-n { font-size: 15px; }
+  .countdown.mini .cd-u { font-size: 8.5px; margin-top: 0; }
+
+  /* The bid action — unmistakably the primary thing on the page */
+  .bid-cta {
+    width: 100%; padding: 20px 24px; font-size: 18.5px; font-weight: 600;
+    background: var(--gold); border-radius: var(--radius); text-align: center;
+    display: block; letter-spacing: 0;
+  }
+  .bid-cta:hover { background: var(--gold-dark); }
+  .bid-cta:disabled { font-size: 16px; }
+  .bid-note { text-align: center; font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
   /* Two-column layouts. These must live in the stylesheet, not in a style
      attribute: an inline grid-template-columns outranks any rule here, which is
      why the wide layout never used to apply. */
@@ -879,12 +915,21 @@ $fontsHref = 'https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family
     background: rgba(255,255,255,.95);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     border-top: 1px solid var(--line);
-    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
-    display: flex; align-items: center; gap: 16px;
+    padding: 11px 18px calc(11px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 14px;
   }
-  .bidbar .val { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
-  .bidbar .grow { flex: 1; text-align: center; }
-  body.has-bidbar { padding-bottom: 84px; }
+  .bidbar .bar-info { display: flex; align-items: center; gap: 14px; }
+  .bidbar .val { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .bidbar .grow { flex: 1; text-align: center; padding: 15px 18px; font-size: 16px; }
+  body.has-bidbar { padding-bottom: 96px; }
+  /* On a phone the bar stacks rather than dropping the countdown — the closing
+     time is the one thing a bidder must never lose sight of. */
+  @media (max-width: 540px) {
+    .bidbar { flex-direction: column; align-items: stretch; gap: 10px; padding-inline: 16px; }
+    .bidbar .bar-info { justify-content: space-between; }
+    .bidbar .grow { width: 100%; }
+    body.has-bidbar { padding-bottom: 152px; }
+  }
   @media (min-width: 820px) { .bidbar { display: none; } body.has-bidbar { padding-bottom: 0; } }
 
   /* Guest banner — invites sign-in without nagging */
@@ -1033,15 +1078,22 @@ function layout_end(): void { ?>
     setTimeout(function () { feedback(ok); }, 120);
   }
 
-  // Countdowns anywhere on the page (the homepage's featured lot uses these).
-  var counters = document.querySelectorAll('.js-count');
+  // Every countdown on the page, wherever it appears. Reads data-end each tick
+  // so a soft-close extension picked up by polling is reflected immediately.
+  var counters = document.querySelectorAll('.countdown');
   if (counters.length) {
+    var pad = function (n) { return String(n).padStart(2, '0'); };
     (function tickAll() {
       counters.forEach(function (el) {
-        var end = new Date(el.dataset.end.replace(' ', 'T')).getTime();
-        var diff = Math.max(0, end - Date.now());
-        var h = Math.floor(diff / 3600000), m = Math.floor(diff % 3600000 / 60000), s = Math.floor(diff % 60000 / 1000);
-        el.textContent = diff <= 0 ? 'انتهى' : [h, m, s].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+        var diff = Math.max(0, parseInt(el.dataset.end, 10) - Date.now());
+        var h = Math.floor(diff / 3600000),
+            m = Math.floor(diff % 3600000 / 60000),
+            s = Math.floor(diff % 60000 / 1000);
+        el.querySelector('.cd-h').textContent = pad(h);
+        el.querySelector('.cd-m').textContent = pad(m);
+        el.querySelector('.cd-s').textContent = pad(s);
+        el.classList.toggle('urgent', diff > 0 && diff <= 10 * 60000);  // last 10 minutes
+        el.classList.toggle('over', diff <= 0);
       });
       setTimeout(tickAll, 1000);
     })();
@@ -1150,6 +1202,25 @@ function bidder_count(int $auctionId): int {
     $stmt = db()->prepare("SELECT COUNT(DISTINCT user_id) FROM bids WHERE auction_id = ? AND status = 'active'");
     $stmt->execute([$auctionId]);
     return (int)$stmt->fetchColumn();
+}
+
+/**
+ * A countdown the bidder can read at a glance: separated hour/minute/second
+ * blocks that turn red in the final minutes. One shared markup so the homepage,
+ * the lot page and the sticky bar all show the closing time the same way.
+ */
+function countdown_block(string $endAt, string $label = 'يغلق بعد', string $id = '', string $extraClass = ''): string {
+    // An absolute epoch timestamp, not a wall-clock string: a "Y-m-d H:i:s" value
+    // is read by the browser in the *device's* timezone, so a phone that isn't set
+    // to Riyadh would count down to the wrong moment.
+    return '<div class="countdown ' . h($extraClass) . '"' . ($id ? ' id="' . h($id) . '"' : '')
+        . ' data-end="' . (strtotime($endAt) * 1000) . '">'
+        . ($label !== '' ? '<div class="cd-label">' . h($label) . '</div>' : '')
+        . '<div class="cd-row">'
+        . '<div class="cd-seg"><div class="cd-n cd-h">--</div><div class="cd-u">ساعة</div></div>'
+        . '<div class="cd-seg"><div class="cd-n cd-m">--</div><div class="cd-u">دقيقة</div></div>'
+        . '<div class="cd-seg"><div class="cd-n cd-s">--</div><div class="cd-u">ثانية</div></div>'
+        . '</div></div>';
 }
 
 function excerpt(?string $text, int $chars = 190): string {
@@ -1293,10 +1364,6 @@ switch ($page) {
                 <div class="eyebrow">السعر الحالي</div>
                 <div class="val"><?= money((int)$featured['current_price']) ?></div>
               </div>
-              <div>
-                <div class="eyebrow">يغلق بعد</div>
-                <div class="val js-count" data-end="<?= h($featured['end_at']) ?>">—</div>
-              </div>
               <?php if ($fBidders): ?>
               <div>
                 <div class="eyebrow">عدد المزايدين</div>
@@ -1304,7 +1371,10 @@ switch ($page) {
               </div>
               <?php endif; ?>
             </div>
-            <a class="btn" href="index.php?page=item&id=<?= $featured['id'] ?>">عرض القطعة والمزايدة</a>
+            <div style="display:flex;justify-content:center;margin-bottom:26px">
+              <?= countdown_block($featured['end_at'], 'يغلق المزاد بعد') ?>
+            </div>
+            <a class="btn bid-cta" style="max-width:340px;margin:0 auto" href="index.php?page=item&id=<?= $featured['id'] ?>">عرض القطعة والمزايدة</a>
           </div>
         </div>
         <?php endif; ?>
@@ -1418,37 +1488,40 @@ switch ($page) {
                 <div class="price" id="js-price"><?= money((int)$auction['current_price']) ?></div>
                 <?php if ($isTop): ?><p class="badge live" style="margin:8px 0 0">أنت أعلى مزايد حاليًا</p><?php elseif ($hasUserBid): ?><p class="badge cancelled" style="margin:8px 0 0">تم تجاوز مزايدتك</p><?php endif; ?>
 
-                <div style="display:flex;gap:34px;flex-wrap:wrap;margin:22px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
-                  <div>
-                    <div class="eyebrow">المزايدة القادمة</div>
-                    <div style="font-weight:600;font-variant-numeric:tabular-nums"><span id="js-min-next"><?= money($minNext) ?></span></div>
-                  </div>
-                  <div>
-                    <div class="eyebrow">يغلق بعد</div>
-                    <div style="font-weight:600;font-variant-numeric:tabular-nums" id="js-countdown" data-end="<?= h($auction['end_at']) ?>">—</div>
-                  </div>
-                  <div>
-                    <div class="eyebrow">عدد المزايدين</div>
-                    <div style="font-weight:600"><?= bidder_count($id) ?></div>
+                <div style="margin:22px 0;padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+                  <?= countdown_block($auction['end_at'], 'يغلق المزاد بعد', 'js-countdown') ?>
+                  <div style="display:flex;gap:34px;flex-wrap:wrap;margin-top:20px">
+                    <div>
+                      <div class="eyebrow">المزايدة القادمة</div>
+                      <div style="font-weight:600;font-variant-numeric:tabular-nums"><span id="js-min-next"><?= money($minNext) ?></span></div>
+                    </div>
+                    <div>
+                      <div class="eyebrow">عدد المزايدين</div>
+                      <div style="font-weight:600"><?= bidder_count($id) ?></div>
+                    </div>
+                    <div>
+                      <div class="eyebrow">موعد الإغلاق (بتوقيت الرياض)</div>
+                      <div style="font-weight:600"><?= fmt_dt($auction['end_at']) ?></div>
+                    </div>
                   </div>
                 </div>
 
                 <?php if (!$user): ?>
-                  <a class="btn" style="display:block;text-align:center" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
+                  <a class="btn bid-cta" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
                 <?php elseif (!$user['accepted_rules_at']): ?>
-                  <a class="btn" style="display:block;text-align:center" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد للمشاركة</a>
+                  <a class="btn bid-cta" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد للمشاركة</a>
                 <?php elseif ($isTop): ?>
-                  <button disabled style="width:100%" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
+                  <button disabled class="bid-cta" id="js-bid-btn">أنت أعلى مزايد حاليًا</button>
                 <?php else: ?>
                   <form method="post" id="bid-form" onsubmit="return confirm('تأكيد المزايدة بمبلغ <?= $minNext ?> ريال على <?= h(addslashes($item['title'])) ?>؟');">
                     <input type="hidden" name="action" value="bid">
                     <input type="hidden" name="auction_id" value="<?= $id ?>">
                     <input type="hidden" name="amount" value="<?= $minNext ?>">
                     <?= csrf_field() ?>
-                    <button type="submit" class="btn-gold" style="width:100%" id="js-bid-btn"><?php if (!$hasBids): ?>ابدأ المزايدة بـ <?= money($minNext) ?><?php else: ?>زايد بـ <?= money($minNext) ?><?php endif; ?></button>
+                    <button type="submit" class="bid-cta" id="js-bid-btn"><?= $hasBids ? 'زايد بـ ' : 'ابدأ المزايدة بـ ' ?><?= money($minNext) ?></button>
                   </form>
                 <?php endif; ?>
-                <p class="muted" style="margin:14px 0 0">
+                <p class="bid-note">
                   <?php if (!$hasBids): ?>
                     أول مزايدة تبدأ من سعر الافتتاح، ثم تزيد <?= money((int)$auction['bid_increment']) ?> في كل مزايدة.
                   <?php else: ?>
@@ -1538,14 +1611,17 @@ switch ($page) {
 
         <?php if ($auction['status'] === 'LIVE'): ?>
         <div class="bidbar">
-          <div>
-            <div class="eyebrow"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
-            <div class="val" id="js-bar-price"><?= money((int)$auction['current_price']) ?></div>
+          <div class="bar-info">
+            <div>
+              <div class="eyebrow"><?= $hasBids ? 'السعر الحالي' : 'سعر الافتتاح' ?></div>
+              <div class="val" id="js-bar-price"><?= money((int)$auction['current_price']) ?></div>
+            </div>
+            <?= countdown_block($auction['end_at'], '', '', 'mini') ?>
           </div>
           <?php if (!$user): ?>
-            <a class="btn grow" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
+            <a class="btn grow btn-gold" href="index.php?page=login&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">سجّل الدخول للمزايدة</a>
           <?php elseif (!$user['accepted_rules_at']): ?>
-            <a class="btn grow" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد</a>
+            <a class="btn grow btn-gold" href="index.php?page=rules&next=<?= urlencode('index.php?page=item&id=' . $id) ?>">الموافقة على القواعد</a>
           <?php elseif ($isTop): ?>
             <button class="grow" disabled>أنت الأعلى</button>
           <?php else: ?>
@@ -1563,16 +1639,9 @@ switch ($page) {
           // the whole page — that way every open viewer re-renders with the correct
           // price, button state, and "you are the top bidder" / "you were outbid" badge.
           var lastBidCount = <?= (int)count($bids) ?>;
-          var endEl = document.getElementById('js-countdown');
-          function tick() {
-            if (!endEl) return;
-            var end = new Date(endEl.dataset.end.replace(' ', 'T')).getTime();
-            var diff = Math.max(0, end - Date.now());
-            var h = Math.floor(diff / 3600000), m = Math.floor(diff % 3600000 / 60000), s = Math.floor(diff % 60000 / 1000);
-            endEl.textContent = diff <= 0 ? 'انتهى' : [h, m, s].map(function(n){return String(n).padStart(2,'0');}).join(':');
-          }
-          tick();
-          setInterval(tick, 1000);
+          // The countdown itself is driven by the shared handler in the footer;
+          // here we only refresh its target time when a soft close extends it.
+          var clocks = document.querySelectorAll('.countdown');
 
           function poll() {
             if (window.__bidding) return;   // a bid is being submitted — don't reload under it
@@ -1586,7 +1655,7 @@ switch ($page) {
                 location.reload();
                 return;
               }
-              if (endEl) endEl.dataset.end = data.end_at;
+              if (data.end_ts) clocks.forEach(function (c) { c.dataset.end = data.end_ts; });
             }).catch(function(){});
           }
           setInterval(poll, 4000);

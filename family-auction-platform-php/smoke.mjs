@@ -219,6 +219,30 @@ let auctionId = null;
   await page.close();
 }
 
+// ---- Countdown must not depend on the viewer's device timezone ----
+{
+  // Same page, two very different device clocks. A wall-clock string would make
+  // these disagree by hours; an absolute timestamp keeps them identical.
+  const readCountdown = async (timezoneId) => {
+    const ctx = await browser.newContext({ timezoneId });
+    const pg = await ctx.newPage();
+    await pg.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    await pg.goto(`${BASE}?page=item&id=${auctionId}`);
+    await pg.waitForTimeout(1200);
+    const mins = await pg.evaluate(() => {
+      const el = document.querySelector(".countdown");
+      if (!el) return null;
+      return Math.round((parseInt(el.dataset.end, 10) - Date.now()) / 60000);
+    });
+    await ctx.close();
+    return mins;
+  };
+  const riyadh = await readCountdown("Asia/Riyadh");
+  const london = await readCountdown("Europe/London");
+  check("countdown is present", riyadh !== null && london !== null);
+  check("countdown agrees across timezones", Math.abs(riyadh - london) <= 1);
+}
+
 // ---- Multi-image gallery ----
 {
   const page = await browser.newPage();
