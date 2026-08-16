@@ -57,6 +57,39 @@ function sound_file(string $which): ?string {
     return null;
 }
 
+/**
+ * The SQLite database lives next to this script, which is the price of the
+ * single-file design. On a normal Apache/LiteSpeed host that makes it fetchable
+ * by anyone who guesses the name — handing over every real name, phone number
+ * and PIN hash, and undoing the whole point of showing only aliases. So the
+ * protection is written on first run rather than left to be remembered.
+ */
+function protect_private_files(): bool {
+    $ht = __DIR__ . '/.htaccess';
+    if (is_file($ht) && strpos((string)@file_get_contents($ht), 'db-journal') !== false) return true;
+    $rules = <<<'HT'
+<FilesMatch "\.(db|db-journal|db-wal|db-shm|sqlite|sqlite3|sql|bak|log)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    <IfModule mod_access_compat.c>
+      Order allow,deny
+      Deny from all
+    </IfModule>
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_autoindex.c>
+  IndexIgnore *
+</IfModule>
+HT;
+    // Append rather than clobber, in case the host put its own rules here.
+    $existing = is_file($ht) ? (string)@file_get_contents($ht) : '';
+    return @file_put_contents($ht, rtrim($existing) . ($existing !== '' ? "\n\n" : '') . $rules . "\n") !== false;
+}
+protect_private_files();
+
 // Served through PHP for the same reason images are: it works on every host.
 if (isset($_GET['sound'])) {
     session_write_close();
@@ -1935,6 +1968,14 @@ switch ($page) {
         $totalEnded = (int)db()->query("SELECT COALESCE(SUM(winning_bid),0) FROM auctions WHERE status='ENDED'")->fetchColumn();
         ?>
         <h1>لوحة التحكم</h1>
+        <?php if (!is_file(__DIR__ . '/.htaccess')): ?>
+          <div class="error">
+            <strong>تحذير أمني:</strong> ملف <code>.htaccess</code> غير موجود، وقاعدة البيانات
+            <code>auction.db</code> قد تكون قابلة للتنزيل من الإنترنت — وهذا يكشف الأسماء الحقيقية
+            وأرقام الجوال لكل المزايدين. تعذّر على الموقع إنشاء الملف تلقائيًا (الغالب أن المجلد
+            غير قابل للكتابة). أنشئه يدويًا من مدير الملفات بجانب <code>index.php</code>.
+          </div>
+        <?php endif; ?>
         <div class="grid">
           <div class="card"><div class="muted">عدد القطع</div><div class="price"><?= $itemCount ?></div></div>
           <div class="card"><div class="muted">المزادات الحالية</div><div class="price"><?= $live ?></div></div>
