@@ -299,6 +299,29 @@ function min_next_bid(array $auction, bool $hasBids): int {
     return $hasBids ? $auction['current_price'] + $auction['bid_increment'] : $auction['opening_price'];
 }
 
+/**
+ * Public labels, numbered per lot.
+ *
+ * A bidder's permanent alias is the same on every lot, so a single slip — "I've
+ * just bid on the necklace" in the family chat — would identify that person in
+ * every lot they ever bid on, past and future. Numbering bidders by the order
+ * they first bid on *this* lot breaks that chain: the same person is bidder 3
+ * here and bidder 1 elsewhere, so a slip only costs them the one lot.
+ *
+ * Admin screens deliberately keep the real alias and name — the auction still
+ * has to be run and settled.
+ */
+function lot_labels(int $auctionId): array {
+    $stmt = db()->prepare("SELECT user_id, MIN(id) AS first_bid FROM bids
+                           WHERE auction_id = ? AND status = 'active'
+                           GROUP BY user_id ORDER BY first_bid ASC");
+    $stmt->execute([$auctionId]);
+    $labels = [];
+    $n = 0;
+    foreach ($stmt as $row) $labels[(int)$row['user_id']] = 'مزايد ' . (++$n);
+    return $labels;
+}
+
 function active_bids(int $auctionId): array {
     // Rank by amount so bids[0] is the true top bidder — the same rule the bid
     // engine uses. Ordering by created_at alone breaks when two bids share the
@@ -306,7 +329,13 @@ function active_bids(int $auctionId): array {
     // person as the top bidder. id DESC is a deterministic final tiebreak.
     $stmt = db()->prepare("SELECT b.*, u.alias FROM bids b JOIN users u ON u.id = b.user_id WHERE b.auction_id = ? AND b.status = 'active' ORDER BY b.amount DESC, b.id DESC");
     $stmt->execute([$auctionId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $labels = lot_labels($auctionId);
+    foreach ($rows as &$r) {
+        // 'label' is what the public sees; 'alias' stays for admin screens.
+        $r['label'] = $labels[(int)$r['user_id']] ?? 'مزايد';
+    }
+    return $rows;
 }
 
 class BidError extends Exception {}
@@ -685,7 +714,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'status') {
         'has_user_bid' => (bool)array_filter($bids, fn($b) => (int)$b['user_id'] === $myId),
         'winner_alias' => null,
         'winning_bid' => $auction['winning_bid'] ? (int)$auction['winning_bid'] : null,
-        'bids' => array_map(fn($b) => ['alias' => $b['alias'], 'amount' => (int)$b['amount'], 'time' => date('h:i A', strtotime($b['created_at'])), 'is_mine' => (int)$b['user_id'] === $myId], $bids),
+        // 'alias' here carries the per-lot label, never the permanent one.
+        'bids' => array_map(fn($b) => ['alias' => $b['label'], 'amount' => (int)$b['amount'], 'time' => date('h:i A', strtotime($b['created_at'])), 'is_mine' => (int)$b['user_id'] === $myId], $bids),
     ]);
     exit;
 }
@@ -1852,7 +1882,7 @@ switch ($page) {
             <tbody id="js-bids-body">
               <?php foreach ($bids as $b): ?>
               <tr<?= (int)$b['user_id'] === $myId ? ' class="mine"' : '' ?>>
-                <td><?= h($b['alias']) ?></td><td><?= money((int)$b['amount']) ?></td><td><?= date('h:i A', strtotime($b['created_at'])) ?></td>
+                <td><?= h($b['label']) ?></td><td><?= money((int)$b['amount']) ?></td><td><?= date('h:i A', strtotime($b['created_at'])) ?></td>
               </tr>
               <?php endforeach; if (!$bids): ?><tr><td colspan="3" class="muted">لا توجد مزايدات بعد</td></tr><?php endif; ?>
             </tbody>

@@ -229,6 +229,22 @@ let auctionId = null;
   await page.close();
 }
 
+// ---- Bidder labels are per-lot, so one slip cannot unmask a whole history ----
+{
+  const page = await browser.newPage();
+  await page.goto(`${BASE}?page=item&id=${auctionId}`);
+  const shown = await page.locator("#js-bids-body").innerText();
+  // The permanent alias created by the admin flow must never reach the page.
+  check("permanent alias is never shown publicly", !shown.includes("مزايد بي اتش بي"));
+  check("bidders are labelled per lot", /مزايد\s*\d+/.test(shown));
+
+  const feed = await (await page.request.get(`${BASE}?ajax=status&id=${auctionId}`)).json();
+  const feedAliases = (feed.bids || []).map(b => b.alias).join(" ");
+  check("status feed exposes only per-lot labels",
+    !feedAliases.includes("مزايد بي اتش بي") && /مزايد\s*\d+/.test(feedAliases));
+  await page.close();
+}
+
 // ---- Countdown must not depend on the viewer's device timezone ----
 {
   // Same page, two very different device clocks. A wall-clock string would make
